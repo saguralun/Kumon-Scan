@@ -1,0 +1,1597 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8">
+<title>Reward Config</title>
+
+<style>
+
+body{
+  font-family:Arial,sans-serif;
+  margin:20px;
+  background:#f5f5f5;
+}
+
+.toolbar{
+  display:flex;
+  gap:10px;
+  margin-bottom:15px;
+  flex-wrap:wrap;
+}
+
+.summary{
+  display:flex;
+  gap:20px;
+  margin-bottom:15px;
+}
+
+.summary div{
+  background:white;
+  padding:10px 16px;
+  border-radius:8px;
+  box-shadow:0 2px 6px rgba(0,0,0,.08);
+}
+
+table{
+
+  width:100%;
+  border-collapse:collapse;
+  background:white;
+
+}
+
+th,td{
+
+  padding:10px;
+  border-bottom:1px solid #ddd;
+  text-align:left;
+
+}
+
+th{
+
+  background:#eee;
+
+}
+
+tr:hover{
+
+  background:#fafafa;
+  cursor:pointer;
+
+}
+
+.badge{
+
+  padding:3px 8px;
+  border-radius:6px;
+  color:white;
+  font-size:12px;
+
+}
+
+.content{
+
+  display:flex;
+  gap:20px;
+  align-items:flex-start;
+
+}
+
+.table-panel{
+
+  flex:1;
+
+}
+
+.preview-panel{
+
+  width:320px;
+
+  background:white;
+
+  padding:20px;
+
+  border-radius:10px;
+
+  box-shadow:0 2px 6px rgba(0,0,0,.1);
+
+  position:sticky;
+  top:20px;
+
+}
+
+.preview-panel label{
+
+  display:block;
+  margin-top:12px;
+  font-weight:bold;
+
+}
+
+.preview-panel input,
+.preview-panel select{
+
+  width:100%;
+  box-sizing:border-box;
+  padding:6px;
+  margin-top:4px;
+
+}
+
+#previewIcon{
+
+  font-size:60px;
+  text-align:center;
+  margin-bottom:10px;
+
+}
+
+tr.selected{
+
+  background:#dbeafe !important;
+
+}
+
+.editor-actions{
+
+  margin-top:20px;
+
+  border-top:1px solid #ddd;
+
+  padding-top:16px;
+
+}
+
+.checkbox-row{
+
+  display:flex;
+
+  align-items:center;
+
+  gap:8px;
+
+  margin-bottom:16px;
+
+  font-weight:normal;
+
+}
+
+.checkbox-row input{
+
+  width:auto;
+
+  margin:0;
+
+}
+
+#saveBtn{
+
+  width:100%;
+
+  padding:10px;
+
+  font-size:15px;
+
+}
+
+#editIcon{
+
+  flex:1;
+  text-align:center;
+  font-size:24px;
+
+}
+
+.summary-detail{
+
+  display:flex;
+  gap:20px;
+  margin-bottom:20px;
+
+}
+
+.summary-card{
+
+  flex:1;
+  background:white;
+  border-radius:10px;
+  padding:16px;
+  box-shadow:0 2px 6px rgba(0,0,0,.08);
+
+}
+
+.summary-card h4{
+
+  margin:0 0 12px;
+
+}
+
+.dashboard-bar{
+
+  display:flex;
+
+  height:14px;
+
+  overflow:hidden;
+
+  border-radius:999px;
+
+  background:#eee;
+
+  margin:8px 0 12px;
+
+}
+
+.dashboard-segment{
+
+  height:100%;
+
+}
+
+.dashboard-legend{
+
+  display:flex;
+
+  flex-wrap:wrap;
+
+  gap:10px;
+
+  font-size:14px;
+
+  align-items:center;
+
+}
+
+.dashboard-legend span{
+
+  white-space:nowrap;
+
+}
+
+.visually-hidden{
+  position:absolute;
+  width:1px;
+  height:1px;
+  padding:0;
+  margin:-1px;
+  overflow:hidden;
+  clip:rect(0,0,0,0);
+  white-space:nowrap;
+  border:0;
+}
+
+.hidden{
+  display:none;
+}
+
+</style>
+
+</head>
+<body>
+
+<h2>🌟 Reward Config</h2>
+
+<div class="summary">
+
+  <div>
+    Total
+    <br>
+    <b id="totalCount">0</b>
+  </div>
+
+  <div>
+    Released
+    <br>
+    <b id="releasedCount">0</b>
+  </div>
+
+  <div>
+    Coming
+    <br>
+    <b id="comingCount">0</b>
+  </div>
+
+  <div>
+    disabled
+    <br>
+    <b id="disabledCount">0</b>
+  </div>
+
+</div>
+
+<div class="summary-detail">
+
+  <div class="summary-card">
+
+    <h4>🎲 Rarity</h4>
+
+    <div id="rarityStats"></div>
+
+  </div>
+
+  <div class="summary-card">
+
+    <h4>📦 Type</h4>
+
+    <div id="typeStats"></div>
+
+  </div>
+
+</div>
+
+<div class="toolbar">
+
+  <button id="calendarBtn">
+    🗓️ Calendar
+  </button>
+
+  <input
+    id="search"
+    placeholder="Search..."
+    aria-label="Search Reward">
+
+  <select id="typeFilter"
+    aria-label="Type Filter">
+    <option>All Type</option>
+  </select>
+
+  <select id="rarityFilter"
+    aria-label="rarityFilter">
+    <option>All Rarity</option>
+  </select>
+
+
+  <select id="statusFilter"
+    aria-label="statusFilter">
+
+    <option>All Status</option>
+
+    <option>Released</option>
+
+    <option>Coming</option>
+
+    <option>Disabled</option>
+
+  </select>
+
+  <button id="syncBtn">
+    🔄 Sync
+  </button>
+
+  <button id="addBtn">
+    + Add Item
+  </button>
+
+</div>
+
+<div class="content">
+
+  <div class="table-panel">
+
+    <table>
+
+    <thead>
+
+    <tr>
+
+    <th >Emoji</th>
+
+    <th data-sort="id">ID</th>
+
+    <th data-sort="name">Name</th>
+
+    <th data-sort="type">Type</th>
+
+    <th data-sort="rarity">Rarity</th>
+
+    <th data-sort="releaseDate">Release</th>
+
+    <th>Enable</th>
+
+    </tr>
+
+    </thead>
+
+    <tbody id="rewardTable">
+
+    </tbody>
+
+    </table>
+
+  </div>
+
+  <div class="preview-panel">
+
+    <h3 id="previewTitle">
+
+      Reward Detail
+
+    </h3>
+
+    <h2 id="previewIcon">
+    ❔
+    </h2>
+
+    <label for="editIcon">
+      Emoji
+    </label>
+
+    <input
+      id="editIcon"
+      maxlength="2"
+      placeholder="Win + ;">
+
+    <label for="editId">ID</label>
+    <input id="editId" disabled>
+
+    <label for="editName">Name</label>
+    <input id="editName">
+
+    <label for="editType">Type</label>
+    <input
+      id="editType"
+      list="typeList">
+
+    <datalist id="typeList"></datalist>
+
+    <label for="editRarity">Rarity</label>
+    <select id="editRarity"></select>
+
+    <label for="editRelease">Release</label>
+    <input type="date" id="editRelease">
+
+    <div class="editor-actions">
+
+      <label class="checkbox-row">
+
+        <input
+          type="checkbox"
+          id="editEnabled">
+
+        Enabled
+
+      </label>
+
+      <button id="saveBtn" disabled>
+
+      💾 Save
+
+      </button>
+
+    </div>
+
+  </div>
+
+</div>
+
+<div id="tableInfo"></div>
+
+<script type="module">
+
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
+import {
+  getFirestore,
+  doc,
+  updateDoc
+} from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
+
+import {
+  checkVersionAndReload
+} from "../shared/versionControl.js";
+
+import {
+  getRewardItems,
+} from "../checkin/reward/rewardItems.js";
+
+import {
+  getRarityStyle
+} from "../checkin/reward/rewardDom.js";
+
+import { qs } from "../checkin/ui/dom.js";
+
+const firebaseConfig = {
+  apiKey: "AIzaSyBfJ9F94tdUw6sIY8ffUPV0AKxXWzZig8s",
+  authDomain: "scan-qrcode-kumon.firebaseapp.com",
+  projectId: "scan-qrcode-kumon",
+};
+
+const app = initializeApp(firebaseConfig);
+const db = getFirestore(app);
+
+
+let items = [];
+
+const statusFilter =
+    qs("#statusFilter");
+
+statusFilter.addEventListener(
+    "change",
+    applyFilters
+);
+
+const typeFilter =
+  qs("#typeFilter");
+
+typeFilter.addEventListener(
+  "change",
+  applyFilters
+);
+
+const rarityFilter =
+  qs("#rarityFilter");
+
+const editIcon =
+  qs("#editIcon");
+
+const editId =
+  qs("#editId");
+
+const editName =
+  qs("#editName");
+
+const editType =
+  qs("#editType");
+
+const editRarity =
+  qs("#editRarity");
+
+const editRelease =
+  qs("#editRelease");
+
+const editEnabled =
+  qs("#editEnabled");
+
+const rarities = [
+  ...new Set(
+    items.map(item => item.rarity)
+  )
+].sort();
+
+rarityFilter.addEventListener(
+  "change",
+  applyFilters
+);
+
+const types = [
+    ...new Set(
+        items.map(item => item.type)
+    )
+].sort();
+
+fillSelect(
+  typeFilter,
+  ["All Type", ...types]
+);
+
+fillTypeList(types);
+
+fillSelect(
+  rarityFilter,
+  ["All Rarity", ...rarities]
+);
+
+fillSelect(
+  editRarity,
+  rarities
+);
+
+let filteredItems = [...items];
+let sortField = "id";
+let sortAsc = true;
+let selectedItem = null;
+let selectedRow = null;
+let isCreating = false;
+
+qs("#calendarBtn").onclick = () => {
+  window.location.href = "rewardCalendar.html";
+};
+
+async function syncRewardItems(){
+
+  syncBtn.disabled = true;
+  syncBtn.textContent = "Syncing...";
+
+  await checkVersionAndReload(db);
+
+  items = getRewardItems();
+
+  rebuildOptions();
+
+  applyFilters();
+
+  syncBtn.textContent = "✔ Synced";
+
+  addBtn.disabled = false;
+
+  setTimeout(() => {
+    syncBtn.textContent = "🔄 Sync";
+    syncBtn.disabled = false;
+  },1000);
+
+}
+
+qs("#syncBtn").onclick = syncRewardItems;
+
+qs("#totalCount").textContent =
+  items.length;
+
+const tbody =
+  qs("#rewardTable");
+
+const saveBtn =
+  qs("#saveBtn");
+
+const addBtn =
+  qs("#addBtn");
+
+const search =
+  qs("#search");
+
+search.addEventListener(
+  "input",
+  applyFilters
+);
+
+editIcon.addEventListener("input", () => {
+
+  previewIcon.textContent =
+    editIcon.value.trim() || "❔";
+
+  markDirty();
+
+});
+
+saveBtn.onclick = async () => {
+
+  if (!isCreating && !selectedItem)
+    return;
+
+  const newData = readEditor();
+
+  if (
+    !isCreating &&
+    !isRewardChanged(selectedItem, newData)
+  ){
+    saveBtn.disabled = true;
+    return;
+  }
+
+  try {
+
+    if (isCreating) {
+
+      if (!newData.id) {
+
+        alert("Please enter ID");
+
+        editId.focus();
+
+        return;
+
+      }
+
+      if (
+
+        items.some(item =>
+
+          item.id === newData.id
+
+        )
+        
+      ){
+
+        alert("ID already exists");
+
+        editId.focus();
+
+        return;
+
+      }
+
+      await createRewardItem(newData);
+
+      items.push(newData);
+
+      selectedItem = newData;
+
+      isCreating = false;
+
+      editId.disabled = true;
+
+      saveBtn.textContent = "💾 Save";
+
+    }
+    else {
+
+      await saveRewardItem(newData);
+
+    }
+
+    Object.assign(
+      selectedItem,
+      newData
+    );
+
+    applyFilters();
+
+    loadEditor(selectedItem);
+
+  }
+  catch(err){
+
+    console.error(err);
+
+    alert("Save failed");
+
+    saveBtn.textContent = "💾 Save";
+
+    saveBtn.disabled = false;
+
+  }
+
+};
+
+addBtn.onclick = () => {
+
+  isCreating = true;
+
+  selectedItem = null;
+
+  if(selectedRow){
+
+    selectedRow.classList.remove("selected");
+
+    selectedRow = null;
+
+  }
+
+  loadEmptyEditor();
+
+};
+
+async function saveRewardItem(item){
+
+  const configRef = doc(
+    db,
+    "system",
+    "config"
+  );
+
+  saveBtn.disabled = true;
+  saveBtn.textContent = "Saving...";
+
+  await updateDoc(configRef, {
+    [`rewardItems.${item.id}`]: item
+  });
+
+  saveBtn.textContent = "✔ Saved";
+
+  await new Promise(resolve =>
+    setTimeout(resolve,1500)
+  );
+
+  saveBtn.textContent = "💾 Save";
+
+}
+
+async function createRewardItem(item){
+
+  const configRef = doc(
+    db,
+    "system",
+    "config"
+  );
+
+  saveBtn.disabled = true;
+  saveBtn.textContent = "Creating...";
+
+  await updateDoc(configRef,{
+    [`rewardItems.${item.id}`]: item
+  });
+
+  saveBtn.textContent = "✔ Created";
+
+  await new Promise(resolve =>
+    setTimeout(resolve,800)
+  );
+
+  saveBtn.textContent = "💾 Save";
+
+}
+
+function rebuildOptions() {
+
+  const rarities = [
+    ...new Set(items.map(i => i.rarity))
+  ].sort();
+
+  const types = [
+    ...new Set(items.map(i => i.type))
+  ].sort();
+
+  fillSelect(typeFilter, ["All Type", ...types]);
+  fillTypeList(types);
+
+  fillSelect(rarityFilter, ["All Rarity", ...rarities]);
+  fillSelect(editRarity, rarities);
+
+}
+
+function createEmptyReward(){
+
+  return {
+
+    id: "",
+    icon: "",
+    name: "",
+    type: "",
+    rarity: "", 
+    releaseDate: new Date()
+      .toISOString()
+      .split("T")[0],
+    enabled: true
+
+  };
+
+}
+
+function loadEmptyEditor(){
+
+  const item =
+    createEmptyReward();
+
+  previewIcon.textContent =
+    item.icon;
+
+  editIcon.value =
+    item.icon;
+
+  qs("#previewTitle").textContent =
+    "✨ New Reward";
+
+  editId.disabled = false;
+
+  editId.value =
+    item.id;
+
+  editName.value =
+    item.name;
+
+  editType.value =
+    item.type;
+
+  editRarity.value =
+    item.rarity;
+
+  editRelease.value =
+    item.releaseDate;
+
+  editEnabled.checked =
+    item.enabled;
+
+  saveBtn.textContent =
+    "✨ Create";
+
+  saveBtn.disabled = false;
+
+}
+
+function isRewardChanged(oldItem, newItem){
+
+  return JSON.stringify(oldItem)
+    !== JSON.stringify(newItem);
+
+}
+
+function markDirty(){
+
+  saveBtn.disabled = false;
+
+}
+
+function fillTypeList(values){
+
+  const list = qs("#typeList");
+
+  list.innerHTML = "";
+
+  values.forEach(type=>{
+
+    list.innerHTML += `
+      <option value="${type}">
+    `;
+
+  });
+
+}
+
+function fillSelect(select, values){
+
+  select.innerHTML = "";
+
+  values.forEach(value => {
+
+    const option =
+      document.createElement("option");
+
+    option.value = value;
+    option.textContent = value;
+
+    select.appendChild(option);
+
+  });
+
+}
+
+function sortItems(items){
+
+  return [...items].sort((a, b) => {
+
+    let valueA;
+    let valueB;
+
+    switch (sortField) {
+
+      case "rarity": {
+
+        const order = {
+          common: 0,
+          uncommon: 1,
+          rare: 2,
+          epic: 3,
+          ultra: 4,
+          legendary: 5,
+        };
+
+        valueA = order[a.rarity] ?? 999;
+        valueB = order[b.rarity] ?? 999;
+        break;
+      }
+
+      case "enabled":
+
+        valueA = a.enabled ? 1 : 0;
+        valueB = b.enabled ? 1 : 0;
+        break;
+
+      default:
+
+        valueA =
+          (a[sortField] ?? "")
+            .toString()
+            .toLowerCase();
+
+        valueB =
+          (b[sortField] ?? "")
+            .toString()
+            .toLowerCase();
+
+    }
+
+    if (valueA < valueB)
+      return sortAsc ? -1 : 1;
+
+    if (valueA > valueB)
+      return sortAsc ? 1 : -1;
+
+    return 0;
+
+  });
+
+}
+
+function renderTable(items){
+
+  tbody.innerHTML = "";
+
+  items.forEach(item=>{
+
+    const tr =
+      document.createElement("tr");
+
+    tr.onclick = () => {
+
+      if(selectedRow){
+
+        selectedRow.classList.remove("selected");
+
+      }
+
+      selectedRow = tr;
+      selectedRow.classList.add("selected");
+      selectItem(item);
+
+    };
+
+    tr.innerHTML = `
+
+<td style="font-size:28px">
+${item.icon}
+</td>
+
+<td>${item.id}</td>
+
+<td>${item.name}</td>
+
+<td>${item.type}</td>
+
+<td>
+
+<span
+class="badge"
+style="${getRarityStyle(item.rarity)}">
+
+${item.rarity}
+
+</span>
+
+</td>
+
+<td>
+
+${getStatusBadge(item)}
+
+</td>
+
+<td>
+
+${item.enabled ? "✅" : "❌"}
+
+</td>
+
+`;
+
+  tbody.appendChild(tr);
+
+  });
+
+  qs("#tableInfo").textContent =
+    items.length === 0
+      ? "Click 🔄 Sync to load Reward Config."
+      : `Showing ${items.length} / ${getRewardItems().length} items`;
+
+}
+
+function selectItem(item){
+
+  isCreating = false;
+
+  editId.disabled = true;
+
+  saveBtn.textContent = "💾 Save";
+
+  selectedItem = item;
+
+  loadEditor(item);
+
+}
+
+function loadEditor(item){
+
+  previewIcon.textContent =
+    item.icon;
+
+  editIcon.value =
+    item.icon;
+
+  qs("#previewTitle").textContent =
+    `${item.icon} ${item.name}`;
+
+  editId.value =
+    item.id;
+
+  editName.value =
+    item.name;
+
+  editType.value =
+    item.type;
+
+  editRarity.value =
+    item.rarity;
+
+  editRelease.value =
+    item.releaseDate;
+
+  editEnabled.checked =
+    item.enabled;
+
+}
+
+function readEditor(){
+
+  return {
+
+    ...(selectedItem ?? {}),
+
+    id: editId.value.trim(),
+
+    icon: editIcon.value.trim() || "❔",
+
+    name: editName.value.trim(),
+
+    type: editType.value,
+
+    rarity: editRarity.value,
+
+    releaseDate: editRelease.value,
+
+    enabled: editEnabled.checked
+
+  };
+
+}
+
+function getStatusBadge(item){
+
+  const status =
+    getReleaseStatus(item);
+
+  switch(status){
+
+    case "Released":
+
+      return `
+        🟢 <small>${item.releaseDate}</small>
+      `;
+
+    case "Coming":
+
+      return `
+        🟡 <small>${item.releaseDate}</small>
+      `;
+
+  }
+
+}
+
+function refreshTable() {
+
+  filteredItems =
+    sortItems(filteredItems);
+
+  renderSummary(filteredItems);
+
+  renderTable(filteredItems);
+
+}
+
+function applyFilters() {
+
+  const keyword =
+    search.value
+      .trim()
+      .toLowerCase();
+
+  const selectedType =
+    typeFilter.value;
+
+  const selectedRarity =
+    rarityFilter.value;
+
+  const selectedStatus =
+    statusFilter.value;
+
+  filteredItems =
+    items.filter(item => {
+
+      const matchSearch =
+
+        item.id
+          .toLowerCase()
+          .includes(keyword)
+
+        ||
+
+        item.name
+          .toLowerCase()
+          .includes(keyword)
+
+        ||
+
+        item.icon
+          .includes(keyword);
+
+      const matchType =
+
+        selectedType === "All Type"
+
+        ||
+
+        item.type === selectedType;
+
+      const matchRarity =
+
+        selectedRarity === "All Rarity"
+
+        ||
+
+        item.rarity === selectedRarity;
+
+      const matchStatus =
+
+        selectedStatus === "All Status"
+
+        ||
+
+        (
+          selectedStatus === "Disabled"
+          && !item.enabled
+        )
+
+        ||
+
+        (
+          selectedStatus !== "Disabled"
+          &&
+          getReleaseStatus(item) === selectedStatus
+        );
+
+      return (
+        matchSearch &&
+        matchType &&
+        matchRarity &&
+        matchStatus
+      );
+
+    });
+
+  refreshTable();
+
+}
+
+function renderRarityDashboard(items){
+
+  const counts = {};
+
+  items.forEach(item=>{
+
+    counts[item.rarity] =
+      (counts[item.rarity] || 0) + 1;
+
+  });
+
+  const rarityOrder = [
+    "common",
+    "uncommon",
+    "rare",
+    "epic",
+    "ultra",
+    "legendary"
+  ];
+
+  const stats = rarityOrder.map(rarity=>{
+
+    const badge =
+
+      rarity === "common" ? "⬜ C " :
+
+      rarity === "uncommon" ? "🟩 UC " :
+
+      rarity === "rare" ? "🟦 R " :
+
+      rarity === "epic" ? "🟪 EP " :
+
+      rarity === "ultra" ? "🟨 UR " :
+
+      "🟧 L ";
+
+    const color =
+
+      rarity === "common" ? "#9ca3af" :
+
+      rarity === "uncommon" ? "#22c55e" :
+
+      rarity === "rare" ? "#3b82f6" :
+
+      rarity === "epic" ? "#8b5cf6" :
+
+      rarity === "ultra" ? "#ec4899" :
+
+      "#f97316";
+
+    return{
+
+      name: rarity,
+
+      label: badge,
+
+      color,
+
+      count: counts[rarity] || 0
+
+    };
+
+  });
+
+  createDashboard(
+
+    qs("#rarityStats"),
+
+    stats,
+
+    items.length
+
+  );
+
+}
+
+function renderTypeDashboard(items){
+
+  const map = {};
+
+  items.forEach(item=>{
+
+    if(!map[item.type]){
+
+      map[item.type] = {
+
+        count:0,
+
+        icon:item.icon
+
+      };
+
+    }
+
+    map[item.type].count++;
+
+  });
+
+  const colors = [
+
+    "#4CAF50",
+
+    "#03A9F4",
+
+    "#2196F3",
+
+    "#FFC107",
+
+    "#8BC34A",
+
+    "#9C27B0",
+
+    "#FF9800",
+
+    "#009688",
+
+    "#673AB7",
+
+    "#795548"
+
+  ];
+
+  const stats =
+
+    Object.entries(map)
+
+      .sort((a,b)=>b[1].count-a[1].count)
+
+      .map(([type,data],index)=>({
+
+        name:type,
+
+        label:data.icon,
+
+        count:data.count,
+
+        color:colors[
+          index % colors.length
+        ]
+
+      }));
+
+  createDashboard(
+
+    qs("#typeStats"),
+
+    stats,
+
+    items.length
+
+  );
+
+}
+
+function createDashboard(container, stats, total){
+
+  let html = `
+    <div class="dashboard-bar">
+  `;
+
+  stats.forEach(item=>{
+
+    const width =
+      total
+        ? item.count / total * 100
+        : 0;
+
+    html += `
+      <div
+        class="dashboard-segment"
+        style="
+          width:${width}%;
+          background:${item.color};
+        "
+        title="${item.name} (${item.count})">
+      </div>
+    `;
+
+  });
+
+  html += `
+    </div>
+
+    <div class="dashboard-legend">
+  `;
+
+  stats.forEach(item=>{
+
+    html += `
+      <span title="${item.name}">
+        ${item.label}${item.count}
+      </span>
+    `;
+
+  });
+
+  html += `
+    </div>
+  `;
+
+  container.innerHTML = html;
+
+}
+
+function renderSummary(items){
+
+  let released = 0;
+  let coming = 0;
+  let disabled = 0;
+
+  items.forEach(item => {
+
+    if (!item.enabled) {
+      disabled++;
+    }
+
+    switch(getReleaseStatus(item)){
+
+      case "Released":
+        released++;
+        break;
+
+      case "Coming":
+        coming++;
+        break;
+    }
+
+  });
+
+  const totalCount =
+    qs("#totalCount");
+
+  const releasedCount =
+    qs("#releasedCount");
+
+  const comingCount =
+    qs("#comingCount");
+
+  const disabledCount =
+    qs("#disabledCount");
+
+  totalCount.textContent =
+    items.length;
+
+  releasedCount.textContent =
+    released;
+
+  comingCount.textContent =
+    coming;
+
+  disabledCount.textContent =
+    disabled;
+  
+  renderRarityDashboard(items);
+  renderTypeDashboard(items);
+
+}
+
+function getReleaseStatus(item){
+
+    const today =
+        new Date();
+
+    const release =
+        new Date(item.releaseDate);
+
+    return release <= today
+        ? "Released"
+        : "Coming";
+
+}
+
+function updateSortHeader(){
+
+  document
+    .querySelectorAll("th[data-sort]")
+    .forEach(th => {
+
+      // เอาข้อความเดิมเก็บไว้ครั้งแรก
+      if (!th.dataset.title) {
+        th.dataset.title = th.textContent;
+      }
+
+      th.textContent = th.dataset.title;
+
+      if (th.dataset.sort === sortField) {
+        th.textContent += sortAsc ? " ▲" : " ▼";
+      }
+
+    });
+
+}
+
+document
+  .querySelectorAll("th[data-sort]")
+  .forEach(th => {
+
+    th.onclick = () => {
+
+      const field =
+        th.dataset.sort;
+
+      if (sortField === field) {
+
+        sortAsc = !sortAsc;
+
+      } else {
+
+        sortField = field;
+        sortAsc = true;
+
+      }
+
+      updateSortHeader();
+      applyFilters();
+
+    };
+
+});
+
+[
+  editName,
+  editType,
+  editRarity,
+  editRelease,
+  editEnabled
+]
+.forEach(el=>{
+
+  el.addEventListener(
+    "input",
+    markDirty
+  );
+
+  el.addEventListener(
+    "change",
+    markDirty
+  );
+
+});
+
+addBtn.disabled = true;
+saveBtn.disabled = true;
+
+updateSortHeader();
+
+renderTable([]);
+renderSummary([]);
+
+
+
+</script>
+
+</body>
+</html>

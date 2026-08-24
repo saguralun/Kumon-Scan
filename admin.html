@@ -1,0 +1,129 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Firestore Test</title>
+</head>
+<body>
+
+<button id="btnUploadReward">
+UPLOAD Reward Items
+</button>
+
+<pre id="log"></pre>
+
+<script type="module">
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
+
+import {
+  getFirestore,
+  doc,
+  updateDoc
+} from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
+
+import {
+  REWARD_ITEMS
+} from "./checkin/reward/rewardItems.js";
+
+const firebaseConfig = {
+  apiKey: "AIzaSyBfJ9F94tdUw6sIY8ffUPV0AKxXWzZig8s",
+  authDomain: "scan-qrcode-kumon.firebaseapp.com",
+  projectId: "scan-qrcode-kumon",
+};
+
+const app = initializeApp(firebaseConfig);
+const db = getFirestore(app);
+
+export async function uploadRewardItems(db){
+
+  const rewardItems =
+    Object.fromEntries(
+
+      REWARD_ITEMS.map(({
+        id,
+        ...item
+      }) => [
+
+        id,
+        item
+
+      ])
+
+    );
+
+  await updateDoc(
+
+    doc(
+      db,
+      "system",
+      "config"
+    ),
+
+    {
+      rewardItems
+    }
+
+  );
+
+  console.log(
+    "✅ Reward Items Uploaded"
+  );
+
+}
+
+const log =
+  document.getElementById("log");
+
+function writeLog(text){
+
+  log.textContent +=
+    text + "\n";
+
+}
+
+let uploading = false;
+
+document
+  .getElementById(
+    "btnUploadReward"
+  )
+  .onclick = async () => {
+
+    if(uploading){
+      return;
+    }
+
+    uploading = true;
+
+    try{
+
+      writeLog(
+        "⏳ Uploading..."
+      );
+
+      await uploadRewardItems(db);
+
+      writeLog(
+        "✅ Upload Complete"
+      );
+
+    }catch(err){
+
+      console.error(err);
+
+      writeLog(
+        "❌ " + err.message
+      );
+
+    }finally{
+
+      uploading = false;
+
+    }
+
+  };
+
+</script>
+
+</body>
+</html>

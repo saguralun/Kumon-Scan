@@ -1,0 +1,1599 @@
+<!doctype html>
+<html>
+<head>
+<link rel="manifest" href="/manifest/manifest-result.json" />
+
+<meta name="apple-mobile-web-app-capable" content="yes" />
+<meta name="mobile-web-app-capable" content="yes" />
+<meta name="apple-mobile-web-app-status-bar-style" content="default" />
+
+<meta name="apple-mobile-web-app-title" content="Kumon result" />
+
+<link rel="apple-touch-icon" href="/icons/icon-result-180.png" />
+<link
+  rel="icon"
+  type="image/png"
+  sizes="192x192"
+  href="icons/icon-result-192.png"
+/>
+
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Attendance Result</title>
+
+<link rel="stylesheet" href="./result/css/result.css" />
+
+</head>
+<body>
+<div class="page-header">
+  <h2 class="page-title">📋 Student Attendance</h2>
+
+  <div class="header-actions">
+    <a
+      href="https://scan-qrcode-kumon.web.app/schedule.html"
+      class="import-btn"
+      target="_blank"
+      rel="noopener noreferrer"
+      title="ตารางเรียน"
+    >
+      📅
+    </a>
+
+    <a
+      href="https://scan-qrcode-kumon.web.app/student_data.html"
+      class="import-btn"
+      target="_blank"
+      rel="noopener noreferrer"
+      title="นำเข้าหรือเปลี่ยนแปลงข้อมูลเด็กนักเรียน"
+    >
+      📥
+    </a>
+  </div>
+</div>
+
+<div id="appVersion"></div>
+<div id="summaryBox"></div>
+<div id="checkoutQueue"></div>
+
+<div class="toggle-wrapper">
+  <div class="toggle">
+    <div class="toggle-slider" id="toggleSlider"></div>
+
+    <button class="toggle-btn active" data-tab="active">
+      🟢 กำลังเรียน
+    </button>
+
+    <button class="toggle-btn" data-tab="completed">🔵 เรียนเสร็จ</button>
+  </div>
+</div>
+
+<div id="subjectTabs">
+  <button data-subject="ME" class="sub-btn active-sub">ME</button>
+  <button data-subject="EFL" class="sub-btn">EFL</button>
+  <button data-subject="TRP" class="sub-btn">TRP</button>
+</div>
+
+<div id="cardView" class="card-list"></div>
+
+<script type="module">
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
+import {
+  getFirestore,
+  collection,
+  query,
+  where,
+  onSnapshot,
+  doc,
+  getDocs,
+  orderBy,
+} from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
+
+import {
+  APP_VERSION,
+  logError,
+  debugLog,
+  getTodayThai,
+  getDiffMinutes,
+  checkVersionAndReload,
+  formatFirestoreTime,
+  checkoutAttendance,
+
+} from "/shared/index.js";
+
+import { $ } from "./checkin/ui/dom.js";
+
+const firebaseConfig = {
+  apiKey: "AIzaSyBfJ9F94tdUw6sIY8ffUPV0AKxXWzZig8s",
+  authDomain: "scan-qrcode-kumon.firebaseapp.com",
+  projectId: "scan-qrcode-kumon",
+};
+
+const app = initializeApp(firebaseConfig);
+const db = getFirestore(app);
+
+const STUDY_LIMIT = {
+  warning: 45,
+  danger: 60,
+};
+
+const warningSecond =
+  STUDY_LIMIT.warning * 60;
+const dangerSecond =
+  STUDY_LIMIT.danger * 60;
+// ======================
+// Checkout State
+// ======================
+const checkoutState = {
+  loading:
+    new Set(),
+
+  pending:
+    new Set(),
+
+  queue:
+    new Map(),
+};
+
+const activityState = {
+  checkinQueue: [],
+  checkoutQueue: [],
+};
+
+const ACTIVITY_CONFIG = {
+  recentCheckinMinutes: 5,
+  recentCheckoutMinutes: 5,
+  maxItems: 4,
+};
+
+const timeFormat = {
+  hour: "2-digit",
+  minute: "2-digit",
+};
+
+let currentDate = getTodayThai();
+let unsubscribeListener = null;
+let currentTab = "active";
+let currentSubject = "ME";
+let activeDataAll = [];
+let completedData = [];
+let listenerInitialized = false;
+
+const subjectIconMap = {
+  ME: "📘", // น้ำเงิน
+  EFL: "📙", // ส้ม
+  TRP: "📗", // เขียว
+};
+
+startListener();
+bindToggleButtons();
+bindSubjectButtons();
+
+// หน้าโหลดของจอ มี checkversion กับโหลด ตารางเวลาเปิด-ปิด
+window.addEventListener("load", async () => {
+  // 🔹 show version บน UI
+  const versionEl = 
+    $("appVersion");
+
+  if (versionEl) {
+
+    versionEl.innerText = "Version : " + APP_VERSION;
+
+  }
+
+  // 🔹 check version
+  const config = 
+    await checkVersionAndReload(
+      db
+    );
+
+  if (!config.ok) 
+    return;
+
+});
+
+function renderCardView() {
+
+  const container =
+    $("cardView");
+
+  if (!container) 
+    return;
+
+  if (currentTab === "active") {
+
+    container.className =
+      "card-list active-list";
+
+    renderActiveView(
+      container
+    );
+
+    return;
+
+  }
+
+  container.className =
+    "card-list completed-list";
+
+  renderCompletedView(
+    container
+  );
+
+}
+
+function getStudyStatus({
+  value,
+  warning,
+  danger,
+  baseClass,
+  blink = false,
+}) {
+
+  let cardClass =
+    baseClass;
+
+  let badgeHTML =
+    "";
+
+  if (value >= danger) {
+
+    cardClass +=
+      " overDanger";
+
+    badgeHTML =
+      `<span class="badge red ${
+        blink
+          ? "blink"
+          : ""
+      }">
+        ${STUDY_LIMIT.danger}+
+      </span>`;
+
+  } else if (
+    value >= warning
+  ) {
+
+    cardClass +=
+      " overWarning";
+
+    badgeHTML =
+      `<span class="badge orange">
+        ${STUDY_LIMIT.warning}+
+      </span>`;
+  }
+
+  return {
+    cardClass,
+    badgeHTML,
+  };
+
+}
+
+function getProgressInfo(
+  seconds
+) {
+
+  let percent = 0;
+  let color =
+    "#4CAF50";
+
+  if (
+    seconds <= warningSecond
+  ) {
+
+    percent =
+      (seconds / warningSecond)
+      * 100;
+
+  } else if (
+    seconds <= dangerSecond
+  ) {
+
+    percent =
+      (
+        (seconds - warningSecond)
+        /
+        (
+          dangerSecond -
+          warningSecond
+        )
+      ) * 100;
+
+    color =
+      "#fb8c00";
+
+  } else {
+
+    percent = 100;
+    color =
+      "#e53935";
+
+  }
+
+  return {
+    percent,
+    color,
+  };
+
+}
+
+function getStatsByMinutes(
+  list,
+  getMinutes
+) {
+
+  let warning = 0;
+  let danger = 0;
+
+  list.forEach((item) => {
+
+    const min =
+      getMinutes(item);
+
+    if (min == null)
+      return;
+
+    if (
+      min >=
+      STUDY_LIMIT.danger
+    ) {
+
+      danger++;
+
+    } else if (
+      min >=
+      STUDY_LIMIT.warning
+    ) {
+
+      warning++;
+
+    }
+
+  });
+
+  return {
+    total:
+      list.length,
+    warning,
+    danger,
+  };
+
+}
+
+function getActiveStudentItems(
+  subject =
+    currentSubject,
+  now =
+    new Date()
+) {
+
+  return activeDataAll
+    .filter(
+      item =>
+        item.subject === subject
+    )
+    .filter(
+      item =>
+        !checkoutState.pending.has(
+          item.id
+        )
+    )
+    .map((item) => {
+
+      const checkIn =
+        item.checkInTime.toDate();
+
+      const seconds =
+        Math.max(
+          0,
+          Math.floor(
+            (now - checkIn) / 1000
+          )
+        );
+
+      return {
+        item,
+        checkIn,
+        seconds,
+        minutes:
+          Math.floor(seconds / 60) || 0,
+      };
+
+    });
+
+}
+
+function renderActiveView(
+  container
+) {
+
+  const now = 
+    new Date();
+
+  const students =
+    getActiveStudentItems(
+      currentSubject,
+      now
+    );
+
+  if (students.length === 0) {
+
+    container.innerHTML =
+      `
+        <div class="empty-state">
+          <div class="empty-icon">☕</div>
+          <p>ตอนนี้ยังไม่มีนักเรียนวิชา ${currentSubject}</p>
+        </div>
+      `;
+
+    return;
+  }
+
+  let html = "";
+
+  students
+    .sort(
+      (a, b) =>
+        a.checkIn -
+        b.checkIn
+    )
+    .forEach((entry) => {
+
+      const {
+        cardClass,
+        badgeHTML,
+      } = getStudyStatus({
+        value:
+          entry.seconds,
+
+        warning:
+          warningSecond,
+
+        danger:
+          dangerSecond,
+
+        baseClass:
+          "student-card",
+
+        blink:
+          true,
+      }); 
+
+      const {
+        percent,
+        color,
+      } = getProgressInfo(
+        entry.seconds
+      );
+
+      html += createActiveCard({
+        item:
+          entry.item,
+        cardClass,
+        badgeHTML,
+        minutes:
+          entry.minutes,
+        percent,
+        color,
+        checkIn:
+          entry.checkIn,
+      });
+
+    });
+
+  container.innerHTML = 
+    html; 
+  
+}
+
+function renderCompletedView(
+  container
+) {
+
+  let html = "";
+
+  const grouped = {
+    ME: [],
+    EFL: [],
+    TRP: [],
+  };
+
+  completedData.forEach(
+    (item) => {
+
+      if (
+        grouped[item.subject]
+      ) {
+
+        grouped[item.subject]
+          .push(item);
+
+      }
+
+    }
+  );
+
+  Object.keys(grouped)
+    .forEach((subject) => {
+
+      const list =
+        grouped[subject];
+
+      if (
+        list.length === 0
+      ) return;
+
+      html +=
+        createSubjectHeader({
+          subject,
+          count:
+            list.length,
+        });
+
+      list
+        .sort(
+          (a, b) =>
+            b.checkOutTime.toDate() -
+            a.checkOutTime.toDate()
+        )
+        .forEach((item) => {
+
+          const checkIn =
+            item.checkInTime.toDate();
+
+          const checkOut =
+            item.checkOutTime.toDate();
+
+          const duration =
+            Math.floor(
+              (checkOut - checkIn)
+              / 1000
+              / 60
+            );
+
+          const {
+            cardClass,
+            badgeHTML,
+          } = getStudyStatus({
+            value:
+              duration,
+
+            warning:
+              STUDY_LIMIT.warning,
+
+            danger:
+              STUDY_LIMIT.danger,
+
+            baseClass:
+              "student-card-complete",
+          });
+
+          html +=
+            createCompletedCard({
+              item,
+              cardClass,
+              badgeHTML,
+              duration,
+              checkIn,
+              checkOut,
+              subject,
+            });
+
+        });
+
+    });
+
+  container.innerHTML =
+    html ||
+    `
+      <div class="empty-state">
+        <div class="empty-icon">☕</div>
+        <p>วันนี้ยังไม่มีนักเรียนเรียนเสร็จ</p>
+      </div>
+    `;
+
+}
+// ======================
+// Checkout Queue UI
+// ======================
+function renderQueue() {
+
+  const el =
+    $(
+      "checkoutQueue"
+    );
+
+  if (!el) return;
+
+  const entries = [];
+
+  // Pending Checkout
+  checkoutState.queue
+  
+    .forEach((name) => {
+
+      entries.push({
+        timeMs:
+          Date.now(),
+
+        html: `
+        <div class="checkout-toast checkout-toast-pending">
+          ⏳ ${name}
+        </div>
+      `,
+      });
+
+    });
+
+  // Recent Check-in
+  activityState.checkinQueue
+    
+    .filter(
+      item =>
+        item.subject === currentSubject
+    )  
+
+    .forEach(item => {
+
+      entries.push({
+        timeMs:
+          getActivityTimeMs(
+            item.time
+          ),
+
+        html: `
+        <div class="checkout-toast">
+          ➡️ ${formatFirestoreTime(item.time)} ${item.nickname}
+        </div>
+      `,
+      });
+
+  });
+
+  // Recent Check-out
+  activityState.checkoutQueue
+  
+    .filter(
+      item =>
+        item.subject === currentSubject
+    )
+    
+    .forEach(item => {
+
+      entries.push({
+        timeMs:
+          getActivityTimeMs(
+            item.time
+          ),
+
+        html: `
+        <div class="checkout-toast">
+          ⬅️ ${formatFirestoreTime(item.time)} ${item.nickname}
+        </div>
+      `,
+      });
+
+    });
+
+  entries.sort(
+    (a, b) =>
+      b.timeMs - a.timeMs
+  );
+
+  const visibleEntries =
+    entries.slice(
+      0,
+      ACTIVITY_CONFIG.maxItems
+    );
+
+  const hiddenCount =
+    entries.length -
+    visibleEntries.length;
+
+  let html =
+    visibleEntries
+      .map(
+        entry =>
+          entry.html
+      )
+      .join("");
+
+  if (
+    hiddenCount > 0
+  ) {
+    html += `
+      <div class="checkout-toast checkout-toast-more">
+        +${hiddenCount} รายการ
+      </div>
+    `;
+  }
+
+  el.innerHTML = html;
+}
+
+function getActivityTimeMs(
+  time
+) {
+
+  if (
+    time instanceof Date
+  ) {
+    return time.getTime();
+  }
+
+  if (
+    time?.toDate
+  ) {
+    return time.toDate().getTime();
+  }
+
+  return Date.now();
+
+}
+
+// ======================
+// Checkout Helpers
+// ======================
+function addPendingCheckout(
+  id,
+  nickname
+) {
+
+  // hide from active list
+  checkoutState.pending.add(id);
+
+  // show in checkout queue
+  checkoutState.queue.set(
+    id,
+    nickname
+  );
+
+  renderQueue();
+  renderAll();
+
+}
+
+function removePendingCheckout(
+  id
+) {
+
+  checkoutState.pending.delete(id);
+
+  checkoutState.queue.delete(id);
+
+  renderQueue();
+
+}
+
+function addRecentCheckin({
+  nickname,
+  subject,
+  time,
+}) {
+
+  activityState.checkinQueue.unshift({
+    nickname,
+    subject,
+    time,
+    expireAt:
+      Date.now() +
+      ACTIVITY_CONFIG.recentCheckinMinutes * 60 * 1000
+  });
+
+}
+
+function addRecentCheckout({
+  nickname,
+  subject,
+  time,
+}) {
+
+  activityState.checkoutQueue.unshift({
+    nickname,
+    subject,
+    time,
+    expireAt:
+      Date.now() +
+      ACTIVITY_CONFIG.recentCheckoutMinutes * 60 * 1000
+  });
+
+}
+
+function cleanupActivityQueue() {
+
+  const now = Date.now();
+
+  activityState.checkinQueue =
+    activityState.checkinQueue.filter(
+      item => item.expireAt > now
+    );
+
+  activityState.checkoutQueue =
+    activityState.checkoutQueue.filter(
+      item => item.expireAt > now
+    );
+
+}
+
+function createActiveCard({
+  item,
+  cardClass,
+  badgeHTML,
+  minutes,
+  percent,
+  color,
+  checkIn,
+}) {
+  return `
+    <div class="${cardClass}"
+      style="--p:${percent}%; --c:${color};
+      background: linear-gradient(
+        to right,
+        ${color}18 var(--p),
+        white var(--p)
+      );">
+
+      <div class="student-left">
+        <span class="student-name">
+          ${item.nickname}
+        </span>
+        ${badgeHTML}
+      </div>
+
+      <div class="student-middle">
+        <div class="student-sub">
+          ${item.firstName} ${item.lastName}
+        </div>
+
+        <div class="student-time">
+          เริ่ม ${checkIn.toLocaleTimeString(
+            "th-TH",
+            timeFormat
+          )}
+        </div>
+      </div>
+
+      <div class="student-right">
+        <div class="time-display">
+          <span class="time-number">
+            ${minutes}
+          </span>
+          <span class="time-unit">
+            นาที
+          </span>
+        </div>
+
+        <button
+          class="checkout-btn"
+          onclick="checkout('${item.id}')"
+          aria-label="Checkout ${item.nickname}"
+        >
+          <svg
+            width="16"
+            height="16"
+            viewBox="0 0 24 24"
+            fill="white"
+          >
+            <path
+              d="M20.285 6.709a1.5 1.5 0 0 0-2.121-2.121l-10.2 10.2-3.535-3.536a1.5 1.5 0 1 0-2.121 2.121l4.596 4.596a1.5 1.5 0 0 0 2.121 0l11.26-11.26z"
+            />
+          </svg>
+        </button>
+      </div>
+
+    </div>
+  `;
+}
+
+function createSubjectHeader({
+  subject,
+  count,
+}) {
+  return `
+    <div class="subject-group-header">
+      <span>
+        ${subjectIconMap[subject]} ${subject}
+      </span>
+
+      <span class="subject-group-count">
+        ${count} คน
+      </span>
+    </div>
+  `;
+}
+
+function createCompletedCard({
+  item,
+  cardClass,
+  badgeHTML,
+  duration,
+  checkIn,
+  checkOut,
+  subject,
+}) {
+  return `
+    <div class="${cardClass}">
+
+      <div class="student-left">
+        <span class="student-name">
+          ${item.nickname}
+        </span>
+
+        <span class="subject-tag subject-${subject}">
+          ${subject}
+        </span>
+
+        ${badgeHTML}
+      </div>
+
+      <div class="student-middle">
+        <div class="student-sub">
+          ${item.firstName}
+          ${item.lastName}
+        </div>
+
+        <div class="student-time">
+          ${checkIn.toLocaleTimeString(
+              "th-TH",
+              timeFormat
+            )}
+          -
+          ${checkOut.toLocaleTimeString(
+            "th-TH",
+            timeFormat
+          )}
+        </div>
+      </div>
+
+      <div class="student-right">
+        <div>
+          <span class="time-number">
+            ${duration}
+          </span>
+
+          <span class="time-unit">
+            นาที
+          </span>
+        </div>
+      </div>
+
+    </div>
+  `;
+}
+
+function renderSummary() {
+
+  const box = 
+    $("summaryBox");
+
+  if (!box) return;
+
+  if (currentTab === "active") {
+    
+    const activeSubject =
+      getActiveStudentItems(
+        currentSubject
+      ).map(
+        entry =>
+          entry.item
+      );
+
+    const allActive =
+      ["ME", "EFL", "TRP"]
+        .flatMap(
+          subject =>
+            getActiveStudentItems(
+              subject
+            )
+        )
+        .map(
+          entry =>
+            entry.item
+        );
+
+    const subjectStats =
+      getStatsByMinutes(
+        activeSubject,
+        (x) =>
+          getDiffMinutes(
+            x.checkInTime
+          )
+      );
+
+    const allStats =
+      getStatsByMinutes(
+        allActive,
+        (x) =>
+          getDiffMinutes(
+            x.checkInTime
+          )
+      );
+      
+    box.innerHTML = `
+      <div class="kpi-row active-summary">
+
+        <div class="kpi-card green">
+
+          <div class="kpi-number">
+            ${subjectStats.total} 
+            <span class="kpi-total">/ ${allStats.total}</span>
+          </div>
+
+          <div class="kpi-label">กำลังเรียน</div>
+
+        </div>
+
+        <div class="kpi-card orange">
+
+          <div class="kpi-number">
+            ${subjectStats.warning} 
+            <span class="kpi-total">/ ${allStats.warning}</span>
+          </div>
+
+          <div class="kpi-label">เกิน ${STUDY_LIMIT.warning} นาที</div>
+
+        </div>
+
+        <div class="kpi-card red">
+
+          <div class="kpi-number">
+            ${subjectStats.danger} 
+            <span class="kpi-total">/ ${allStats.danger}</span>
+          </div>
+
+          <div class="kpi-label">เกิน ${STUDY_LIMIT.danger} นาที</div>
+
+        </div>
+
+      </div>
+    `;
+
+  } else {
+    
+    const completedStats =
+      getStatsByMinutes(
+        completedData,
+        (item) =>
+          item.totalMinutes
+      );
+
+    box.innerHTML = `
+      <div class="kpi-row">
+        <div class="kpi-card green">
+          <div class="kpi-number">${completedStats.total}</div>
+          <div class="kpi-label">เรียนเสร็จแล้ว</div>
+        </div>
+
+        <div class="kpi-card orange">
+          <div class="kpi-number">${completedStats.warning}</div>
+          <div class="kpi-label">เกิน ${STUDY_LIMIT.warning} นาที</div>
+        </div>
+
+        <div class="kpi-card red">
+          <div class="kpi-number">${completedStats.danger}</div>
+          <div class="kpi-label">เกิน ${STUDY_LIMIT.danger} นาที</div>
+        </div>
+
+      </div>
+    `;
+  }
+}
+
+function renderActiveControls() {
+
+  const subjectTabs =
+    $("subjectTabs");
+
+  if (
+    !subjectTabs
+  ) {
+    return;
+  }
+
+  const isActive =
+    currentTab === "active";
+
+  subjectTabs.style.display =
+    isActive
+      ? ""
+      : "none";
+
+  const subjectCounts = {};
+
+  ["ME", "EFL", "TRP"]
+    .forEach((subject) => {
+
+      subjectCounts[subject] =
+        getActiveStudentItems(
+          subject
+        ).length;
+
+    });
+
+  document
+    .querySelectorAll(
+      ".sub-btn"
+    )
+    .forEach((btn) => {
+
+      const subject =
+        btn.dataset.subject;
+
+      btn.innerHTML =
+        `<span>${subjectIconMap[subject]} ${subject}</span>
+         <strong>${subjectCounts[subject] || 0}</strong>`;
+
+    });
+
+}
+
+// load attendance ที่เป็น completed ของวันนี้
+async function loadCompleted() {
+  const q = query(
+    collection(db, "attendance"),
+    where("date", "==", currentDate),
+    where("status", "==", "completed"),
+    orderBy("checkOutTime", "desc"),
+  );
+
+  const snapshot = 
+    await getDocs(q);
+
+  completedData = [];
+
+  snapshot.forEach((docSnap) => {
+    completedData.push({
+      id: docSnap.id,
+      ...docSnap.data(),
+    });
+  });
+
+  renderAll();
+}
+
+function updateToggleSlider(
+  tab
+) {
+
+  const slider =
+    $("toggleSlider");
+
+  slider.style.transform =
+    tab === "active"
+      ? "translateX(0%)"
+      : "translateX(100%) translateX(-6%)";
+
+  slider.style.background =
+    tab === "active"
+      ? "#4CAF50"
+      : "#2196F3";
+
+}
+
+function bindToggleButtons() {
+
+  document
+    .querySelectorAll(
+      ".toggle-btn"
+    )
+    .forEach((btn) => {
+
+      btn.addEventListener(
+        "click", 
+        async () => {
+
+        const tab = 
+          btn.dataset.tab;
+
+        await switchTab(tab);
+
+        document
+          .querySelectorAll(
+            ".toggle-btn"
+          )
+          .forEach((b) => 
+            b.classList.remove(
+              "active"
+            )
+          );
+
+        btn.classList.add(
+          "active"
+        );
+
+        updateToggleSlider(
+          tab
+        );
+
+      }
+    );
+
+  });
+
+}
+
+function bindSubjectButtons() {
+
+  document
+    .querySelectorAll(
+      ".sub-btn"
+    )
+    .forEach((btn) => {
+
+      btn.addEventListener(
+        "click",
+        () => {
+
+          const subject =
+            btn.dataset.subject;
+
+          if (
+            subject ===
+            currentSubject
+          ) {
+            return;
+          }
+
+          currentSubject =
+            subject;
+
+          document
+            .querySelectorAll(
+              ".sub-btn"
+            )
+            .forEach((b) =>
+              b.classList.remove(
+                "active-sub"
+              )
+            );
+
+          btn.classList.add(
+            "active-sub"
+          );
+
+          if (
+            currentTab !==
+            "active"
+          ) {
+            return;
+          }
+
+          renderAll();
+
+        }
+      );
+
+    });
+
+}
+
+async function switchTab(tab) {
+
+  if (tab === currentTab) {
+    return;
+  }
+
+  currentTab = tab;
+
+  const isActive =
+    tab === "active";
+
+  $("subjectTabs").style.display =
+    isActive 
+      ? "" 
+      : "none";
+
+  if (isActive) {
+
+    rebuildCheckinQueue();
+    renderQueue();
+    startListener();
+
+    return;
+
+  } 
+
+  if (unsubscribeListener) {
+
+    unsubscribeListener();
+    unsubscribeListener = null;
+
+  }
+
+  listenerInitialized = false;
+  
+  $("cardView").innerHTML = 
+    "<p>กำลังโหลด...</p>";
+
+  await loadCompleted(); 
+
+}
+
+window.checkout = async function (
+  id
+) {
+
+  if (checkoutState.loading.has(id)) return;
+
+  checkoutState.loading.add(id);
+
+  debugLog(
+    "CHECKOUT",
+    "start",
+    { id }
+  );
+
+  let snapshot;
+
+  try {
+
+    snapshot = 
+      activeDataAll.find(
+        (x) => x.id === id
+      );
+
+    if (!snapshot)
+      throw new Error(
+        "snapshot-missing"
+      );
+
+    debugLog(
+      "CHECKOUT",
+      "snapshot found",
+      {
+        studentId:
+          snapshot.studentId,
+        subject:
+          snapshot.subject,
+      }
+    );
+
+    addPendingCheckout(
+      id,
+      snapshot.nickname
+    );
+
+    await checkoutAttendance({
+      db,
+      attendanceData: snapshot
+    });
+
+    removePendingCheckout(
+      id
+    );
+
+    addRecentCheckout({
+      nickname: snapshot.nickname,
+      subject: snapshot.subject,
+      time: new Date(),
+    });
+
+    renderAll();
+
+    debugLog(
+      "CHECKOUT",
+      "transaction success",
+      { id }
+    );
+
+    if (
+      currentTab === "completed"
+    ) {
+
+      await loadCompleted();
+
+    }
+
+  } catch (e) {
+    
+    if (e.message === "already-completed") {
+
+      debugLog(
+        "CHECKOUT",
+        "ignore",
+        {
+          id,
+          message:
+            e.message,
+        }
+      );
+
+      removePendingCheckout(
+        id
+      );
+
+      renderAll();
+
+      return;
+
+    }
+    
+    await logError(db, {
+      tag: "CHECKOUT",
+      message:
+        e.message ||
+        "checkout failed",
+      error: e,
+      extra: {
+        attendanceId:
+          id,
+        studentId:
+          snapshot?.studentId,
+        subject:
+          snapshot?.subject,
+        slotKey:
+          snapshot?.slotKey,
+        stage:
+          "checkout-flow",
+      },
+    });
+
+    removePendingCheckout(
+      id
+    );
+    
+    renderAll();
+
+  } finally {
+
+    checkoutState.loading.delete(
+      id
+    );
+
+    debugLog(
+      "CHECKOUT",
+      "end",
+      { id }
+    );
+
+  }
+
+};
+
+function rebuildCheckinQueue() {
+
+  activityState.checkinQueue = [];
+
+  activeDataAll.forEach(item => {
+
+    const minutes =
+      getDiffMinutes(item.checkInTime);
+
+    if (minutes < ACTIVITY_CONFIG.recentCheckinMinutes) {
+
+      addRecentCheckin({
+        nickname: item.nickname,
+        subject: item.subject,
+        time: item.checkInTime.toDate(),
+      });
+
+    }
+
+  });
+
+}
+
+function startListener() {
+
+  if (unsubscribeListener) {
+
+    unsubscribeListener();
+
+    unsubscribeListener = 
+      null;
+
+  }
+
+  // 🔹 query ของทุก active ทุกวิชา
+  const qAll = query(
+    collection(db, "attendance"),
+    where("date", "==", currentDate),
+    where("status", "==", "active"),
+    orderBy("checkInTime", "asc"),
+  );
+
+  unsubscribeListener = 
+    onSnapshot(qAll, (snapshot) => {
+
+      // รอบแรก ไม่ต้องแจ้งเตือน
+      if (!listenerInitialized) {
+
+        snapshot.forEach((docSnap) => {
+
+          const data = docSnap.data();
+
+          const minutes =
+            getDiffMinutes(
+              data.checkInTime
+            );
+
+          if (
+            minutes <
+            ACTIVITY_CONFIG.recentCheckinMinutes
+          ) {
+
+            addRecentCheckin({
+              nickname: data.nickname,
+              subject: data.subject,
+              time: data.checkInTime.toDate(),
+            });
+
+          }
+
+        });
+
+      } else {
+
+        snapshot.docChanges().forEach(change => {
+
+          if (change.type !== "added")
+            return;
+
+          const data = change.doc.data();
+
+          addRecentCheckin({
+            nickname: data.nickname,
+            subject: data.subject,
+            time: data.checkInTime.toDate(),
+          });
+
+        });
+
+      }
+
+      activeDataAll = [];
+
+      snapshot.forEach((docSnap) => {
+
+        const data = docSnap.data();
+        data.id = docSnap.id;
+
+        activeDataAll.push(data);
+
+      });
+
+      listenerInitialized = true;
+
+      renderAll();
+
+  });
+
+}
+
+function renderAll() {
+
+  cleanupActivityQueue();
+
+  renderSummary();
+
+  renderActiveControls();
+
+  renderQueue();
+
+  renderCardView();
+
+}
+
+document.addEventListener(
+  "visibilitychange", 
+  () => {
+
+    if (document.visibilityState === "visible") {
+
+      if (currentTab === "active") {
+        renderAll();
+      }
+
+    }
+
+});
+
+setInterval(() => {
+  if (currentTab === "active") {
+    renderAll();
+  }
+}, 60000);
+
+</script>
+</body>
+</html>

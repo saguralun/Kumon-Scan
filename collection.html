@@ -1,0 +1,133 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<meta name="theme-color" content="#eaf6ff" />
+<title>My Collection</title>
+
+<link rel="stylesheet" href="./collection/css/collection.css" />
+
+</head>
+<body>
+
+<div class="container">
+
+  <div class="header">
+    <div class="title">🌟 My Collection</div>
+    <div class="subtitle" id="studentInfo"></div>
+    <div class="progress-wrapper">
+      <div class="progress-bar">
+        <div class="progress-fill" id="progressFill"></div>
+      </div>
+      <div class="progress-text" id="progressText">
+        0 / 50 Collected
+      </div>
+    </div>
+  </div>
+
+  <button
+    class="back-btn"
+    onclick="goBackCheckin()"
+    title="กลับ"
+    aria-label="กลับหน้าเช็กอิน">
+    ←
+  </button>
+  <div id="collectionContainer"></div>
+</div>
+
+<div class="modal" id="modal">
+  <div class="modal-box">
+    <div class="modal-icon" id="modalIcon">🐻</div>
+    <div class="modal-title" id="modalTitle">Brown Bear</div>
+    <div class="modal-detail" id="modalDetail"></div>
+    <button class="close-btn" onclick="closeModal()">ปิด</button>
+  </div>
+</div>
+
+<script type="module">
+
+import {
+  openModal,
+  openComingSoon,
+  closeModal,
+} from "./collection/js/collectionModal.js";
+
+import {
+  renderCollection,
+} from "./collection/js/collectionRenderer.js";
+
+import {
+  loadStudentSession,
+  loadSystemConfig, 
+} from "../checkin/modules/storage.js";
+
+import {
+  setRarities,
+} from "../checkin/reward/rewardRarity.js";
+
+import {
+  setRewardItems,
+} from "../checkin/reward/rewardItems.js";
+
+import { $ } from "../checkin/ui/dom.js";
+
+function requireStudentSession() {
+
+  const session =
+    loadStudentSession();
+
+  if (!session.studentId) {
+
+    alert("กรุณาเช็กอินก่อน");
+
+    location.href = "checkin.html";
+
+    throw new Error("NO_STUDENT_SESSION");
+  }
+
+  return session;
+}
+
+function initStudentHeader() {
+
+  $("studentInfo").innerHTML = `
+    👤 ${session.profile?.nickname || "-"}
+    &nbsp;•&nbsp;
+    🆔 ${session.studentId}
+  `;
+
+}
+
+window.goBackCheckin = function(){
+
+  location.href = "checkin.html";
+
+}
+
+const session = requireStudentSession();
+
+initStudentHeader();
+
+const config =
+  loadSystemConfig();
+
+setRarities(
+  config?.rarities ?? []
+);
+
+setRewardItems(
+  config?.rewardItems ?? []
+);
+
+renderCollection(
+  session.inventory ?? {}
+);
+
+window.closeModal =
+  closeModal;
+
+</script>
+
+</body>
+</html>

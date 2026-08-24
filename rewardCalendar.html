@@ -1,0 +1,825 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+
+<meta charset="UTF-8">
+<title>Reward Calendar</title>
+
+<style>
+
+*{
+  box-sizing:border-box;
+}
+
+body{
+  margin:20px;
+  font-family:Arial,sans-serif;
+  background:#f5f5f5;
+}
+
+h2{
+  margin-top:0;
+}
+
+.toolbar{
+
+  display:flex;
+
+  justify-content:space-between;
+
+  align-items:center;
+
+  margin-bottom:20px;
+
+  padding-bottom:15px;
+
+  border-bottom:1px solid #ddd;
+
+}
+
+.left-tools{
+
+  display:flex;
+  gap:10px;
+
+}
+
+.month-nav{
+
+  display:flex;
+  justify-content:center;
+  align-items:center;
+  gap:20px;
+
+  margin-bottom:25px;
+
+}
+
+button{
+
+  padding:10px 18px;
+
+  border-radius:8px;
+
+  font-weight:bold;
+
+}
+
+.month-title{
+
+  min-width:220px;
+
+  text-align:center;
+
+  font-size:24px;
+
+  font-weight:bold;
+
+}
+
+.calendar-wrapper{
+  display:grid;
+  grid-template-columns:repeat(3,1fr);
+  gap:20px;
+}
+
+.month-card{
+
+  background:white;
+
+  border-radius:12px;
+
+  overflow:hidden;
+
+  border:1px solid #ddd;
+
+  box-shadow:0 2px 6px rgba(0,0,0,.08);
+
+}
+
+.month-header{
+
+  background:#4f46e5;
+
+  color:white;
+
+  padding:14px;
+
+  font-size:18px;
+
+  text-align:center;
+
+  font-weight:bold;
+
+}
+
+.week-header{
+
+  display:grid;
+
+  grid-template-columns:repeat(7,1fr);
+
+  background:#f3f4f6;
+
+  text-align:center;
+
+  font-weight:bold;
+
+}
+
+.week-header div{
+
+  padding:10px;
+
+}
+
+.days{
+  display:grid;
+  grid-template-columns:repeat(7,1fr);
+  grid-auto-rows:130px;
+}
+
+.day{
+
+  border:1px solid #eee;
+
+  padding:6px;
+
+  display:flex;
+
+  flex-direction:column;
+
+  overflow:hidden;
+
+}
+
+.day-number{
+
+  width:26px;
+  height:26px;
+
+  border-radius:50%;
+
+  display:flex;
+
+  justify-content:center;
+  align-items:center;
+
+  font-size:13px;
+  font-weight:bold;
+
+}
+
+.reward-list{
+
+  display:flex;
+
+  flex-wrap:wrap;
+
+  gap:4px;
+
+  align-content:flex-start;
+
+}
+
+.reward{
+
+  font-size:18px;
+
+  cursor:pointer;
+
+}
+
+.reward:hover{
+
+  transform:scale(1.15);
+
+}
+
+.today{
+
+  background:#eef5ff;
+
+  border:2px solid #3b82f6;
+
+}
+
+.today .day-number{
+
+  background:#2563eb;
+  color:white;
+
+}
+
+.other-month{
+
+  background:#fafafa;
+
+}
+
+.other-month .day-number{
+
+  color:#c5c5c5;
+
+}
+
+button{
+
+  padding:10px 16px;
+
+  cursor:pointer;
+
+  border:none;
+
+  border-radius:8px;
+
+  background:#4f46e5;
+
+  color:white;
+
+}
+
+button:disabled{
+
+  background:#999;
+
+}
+
+</style>
+
+</head>
+
+<body>
+
+<h2>
+🗓️ Reward Calendar
+</h2>
+
+<div class="toolbar">
+
+  <div class="left-tools">
+
+    <button id="configBtn">
+      ⚙️ Config
+    </button>
+
+    <button id="syncBtn">
+      🔄 Sync
+    </button>
+
+    <button id="saveBtn" disabled>
+      💾 Save
+    </button>
+
+  </div>
+
+</div>
+
+<div class="month-nav">
+
+  <button id="prevBtn">
+    ◀
+  </button>
+
+  <div class="month-title">
+
+    July 2026
+
+  </div>
+
+  <button id="nextBtn">
+    ▶
+  </button>
+
+</div>
+
+<div class="calendar-wrapper">
+
+</div>
+
+</body>
+</html>
+
+<script type="module">
+
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
+import {
+  getFirestore,
+  doc,
+  updateDoc
+} from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
+
+import {
+  checkVersionAndReload
+} from "../shared/versionControl.js";
+
+import {
+  getRewardItems,
+} from "../checkin/reward/rewardItems.js";
+
+const firebaseConfig = {
+  apiKey: "AIzaSyBfJ9F94tdUw6sIY8ffUPV0AKxXWzZig8s",
+  authDomain: "scan-qrcode-kumon.firebaseapp.com",
+  projectId: "scan-qrcode-kumon",
+};
+
+const app = initializeApp(firebaseConfig);
+const db = getFirestore(app);
+
+const WEEK_NAMES = [
+  "จ","อ","พ","พฤ","ศ","ส","อา"
+];
+
+document.querySelectorAll(".week-header")
+  .forEach(header=>{
+
+    header.innerHTML =
+      WEEK_NAMES
+        .map(day=>`<div>${day}</div>`)
+        .join("");
+
+  });
+
+const MONTH_NAMES = [
+
+  "มกราคม",
+  "กุมภาพันธ์",
+  "มีนาคม",
+  "เมษายน",
+  "พฤษภาคม",
+  "มิถุนายน",
+  "กรกฎาคม",
+  "สิงหาคม",
+  "กันยายน",
+  "ตุลาคม",
+  "พฤศจิกายน",
+  "ธันวาคม"
+
+];
+
+const state = {
+
+  currentMonth: new Date(),
+
+  rewardMap: new Map(),
+
+  dirty:false,
+
+  draggingItem:null,
+
+  items: [],
+
+};
+
+const ui = {
+
+  calendar: document.querySelector(".calendar-wrapper"),
+
+  cards: [],
+
+  monthTitle: document.querySelector(".month-title"),
+
+  prevBtn: document.getElementById("prevBtn"),
+
+  nextBtn: document.getElementById("nextBtn"),
+
+  syncBtn: document.getElementById("syncBtn"),
+
+  saveBtn: document.getElementById("saveBtn")
+
+
+};
+
+const MONTH_COUNT = 6;
+
+state.currentMonth.setDate(1);
+
+ui.syncBtn.addEventListener("click", sync);
+
+ui.saveBtn.addEventListener("click", save);
+
+document.getElementById("configBtn").onclick = () => {
+  window.location.href = "rewardConfig.html";
+};
+
+ui.prevBtn.onclick=()=>{
+
+  state.currentMonth.setMonth(
+    state.currentMonth.getMonth()-1
+  );
+
+  render();
+
+};
+
+ui.nextBtn.onclick=()=>{
+
+  state.currentMonth.setMonth(
+    state.currentMonth.getMonth()+1
+  );
+
+  render();
+
+};
+
+function buildRewardMap(){
+
+  state.rewardMap.clear();
+
+  state.items.forEach(item=>{
+
+    if(!state.rewardMap.has(item.releaseDate)){
+
+      state.rewardMap.set(
+        item.releaseDate,
+        []
+      );
+
+    }
+
+    state.rewardMap
+      .get(item.releaseDate)
+      .push(item);
+
+  });
+
+}
+
+function renderDay(day){
+
+  const div =
+    document.createElement("div");
+
+  div.className="day";
+  div.dataset.date = formatDate(day.date);
+
+  if(!day.currentMonth){
+
+    div.classList.add("other-month");
+
+  }
+
+  if(day.isToday){
+
+    div.classList.add("today");
+
+  }
+
+  const rewards =
+    day.currentMonth
+      ? getRewards(day.date)
+      : [];
+
+  const rewardHtml =
+    rewards.map(item=>`
+
+      <div
+        class="reward"
+        draggable="true"
+        data-id="${item.id}"
+        title="${item.id}"
+      >
+        ${item.icon}
+      </div>
+
+    `).join("");
+
+  div.innerHTML=`
+
+    <div class="day-number">
+
+      ${day.day}
+
+    </div>
+
+    <div class="reward-list">
+
+      ${rewardHtml}
+
+    </div>
+
+  `;
+  
+  div.querySelectorAll(".reward").forEach(el => {
+
+    el.addEventListener("dragstart", onDragStart);
+
+  });
+
+  if(day.currentMonth){
+
+    div.addEventListener("dragover", onDragOver);
+    div.addEventListener("drop", onDrop);
+
+  }
+
+  return div;
+
+}
+
+function onDragOver(e){
+
+  e.preventDefault();
+
+}
+
+function onDrop(e){
+
+  e.preventDefault();
+
+  if(!state.draggingItem){
+    return;
+  }
+
+  const targetDate = e.currentTarget.dataset.date;
+
+  if (state.draggingItem.releaseDate === targetDate) {
+    state.draggingItem = null;
+    return;
+  }
+
+  state.draggingItem.releaseDate =
+    e.currentTarget.dataset.date;
+
+  state.dirty = true;
+
+  updateSaveButton();
+
+  refresh();
+
+  state.draggingItem = null;
+
+}
+
+function onDragStart(e){
+
+  state.draggingItem =
+    state.items.find(item =>
+      item.id === e.target.dataset.id
+    );
+
+  console.log(state.draggingItem);
+
+}
+
+function renderMonth(monthCard, date){
+
+  const count = getRewardCountByMonth(date);
+
+  monthCard.querySelector(".month-header").textContent =
+    `${formatMonth(date)} · 🎁 (${count})`;
+
+  const daysElement =
+    monthCard.querySelector(".days");
+
+  daysElement.innerHTML = "";
+
+  const days =
+    buildCalendar(date);
+
+  days.forEach(day=>{
+
+    daysElement.appendChild(
+      renderDay(day)
+    );
+
+  });
+
+}
+
+function buildCalendar(date){
+
+  const year = date.getFullYear();
+  const month = date.getMonth();
+
+  const firstDay = new Date(year, month, 1);
+
+  let startWeekday = firstDay.getDay();
+
+  // Sunday = 0 -> Monday = 0
+  startWeekday = (startWeekday + 6) % 7;
+
+  const totalDays =
+    new Date(year, month + 1, 0).getDate();
+
+  const totalCells =
+    startWeekday + totalDays;
+
+  const cellCount =
+    Math.ceil(totalCells / 7) * 7;
+
+  const startDate =
+    new Date(year, month, 1 - startWeekday);
+
+  const cells = [];
+
+  for(let i = 0; i < cellCount; i++){
+
+    const d = new Date(startDate);
+    d.setDate(startDate.getDate() + i);
+
+    const today = new Date();
+
+    cells.push({
+
+      date: d,
+
+      day: d.getDate(),
+
+      currentMonth: d.getMonth() === month,
+
+      isToday:
+        d.getFullYear() === today.getFullYear() &&
+        d.getMonth() === today.getMonth() &&
+        d.getDate() === today.getDate()
+
+    });
+
+  }
+
+  return cells;
+
+}
+
+function formatMonth(date){
+
+  return (
+    MONTH_NAMES[date.getMonth()] +
+    " " +
+    date.getFullYear()
+  );
+
+}
+
+function formatDate(date){
+
+  const y = date.getFullYear();
+
+  const m = String(
+    date.getMonth()+1
+  ).padStart(2,"0");
+
+  const d = String(
+    date.getDate()
+  ).padStart(2,"0");
+
+  return `${y}-${m}-${d}`;
+
+}
+
+function getRewards(date){
+
+  const key =
+    formatDate(date);
+
+  return state.rewardMap.get(key) ?? [];
+
+}
+
+function updateSaveButton(){
+
+  ui.saveBtn.disabled = !state.dirty;
+
+}
+
+function refresh(){
+
+    buildRewardMap();
+
+    render();
+
+}
+
+function render(){
+
+  ui.cards.forEach((card,index)=>{
+
+    const month = new Date(state.currentMonth);
+    month.setMonth(month.getMonth() + index);
+
+    renderMonth(card, month);
+
+  });
+
+}
+
+function getRewardCountByMonth(date){
+
+  const year = date.getFullYear();
+  const month = date.getMonth();
+
+  return state.items.filter(item => {
+
+    const d = new Date(item.releaseDate);
+
+    return (
+      d.getFullYear() === year &&
+      d.getMonth() === month
+    );
+
+  }).length;
+
+}
+
+function createMonthCards(){
+
+  ui.calendar.innerHTML = "";
+
+  for(let i=0;i<MONTH_COUNT;i++){
+
+    ui.calendar.insertAdjacentHTML(
+      "beforeend",
+      `
+      <div class="month-card">
+        <div class="month-header"></div>
+        <div class="week-header"></div>
+        <div class="days"></div>
+      </div>
+      `
+    );
+
+  }
+
+  document.querySelectorAll(".week-header")
+    .forEach(header=>{
+
+      header.innerHTML = WEEK_NAMES
+        .map(day=>`<div>${day}</div>`)
+        .join("");
+
+    });
+
+  ui.cards =
+    document.querySelectorAll(".month-card");
+
+}
+
+async function sync() {
+
+  ui.syncBtn.disabled = true;
+  ui.syncBtn.textContent = "Syncing...";
+
+  await checkVersionAndReload(db);
+
+  state.items = getRewardItems();
+
+  state.dirty = false;
+
+  updateSaveButton();
+
+  refresh();
+
+  ui.syncBtn.textContent = "✔ Synced";
+
+  setTimeout(() => {
+
+    ui.syncBtn.textContent = "🔄 Sync";
+    ui.syncBtn.disabled = false;
+
+  }, 1000);
+
+}
+
+async function save(){
+
+  if(!state.dirty){
+    return;
+  }
+
+  ui.saveBtn.disabled = true;
+  ui.saveBtn.textContent = "Saving...";
+
+  const rewardItems = {};
+
+  state.items.forEach(item => {
+
+    rewardItems[item.id] = item;
+
+  });
+
+  console.log("Saving", Object.keys(rewardItems).length, "items");
+
+  await updateDoc(
+    doc(db, "system", "config"),
+    {
+      rewardItems
+    }
+  );
+
+  state.dirty = false;
+
+  updateSaveButton();
+
+  ui.saveBtn.textContent = "✔ Saved";
+
+  setTimeout(() => {
+
+    ui.saveBtn.textContent = "💾 Save";
+
+  },1000);
+
+}
+
+createMonthCards();
+render();
+</script>

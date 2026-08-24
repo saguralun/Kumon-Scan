@@ -1,0 +1,792 @@
+/* ========================================
+   RESET / BASE
+======================================== */
+
+html, body {
+  touch-action: manipulation;
+}
+
+body {
+  font-family: 'Segoe UI', sans-serif;
+  margin: 0;
+  background: #EAF6FD;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  height: 100vh;
+}
+
+.hidden{
+  display:none;
+}
+
+.no-select {
+  -webkit-touch-callout: none;
+  -webkit-user-select: none;
+  -khtml-user-select: none;
+  -moz-user-select: none;
+  -ms-user-select: none;
+  user-select: none;
+}
+
+
+/* ========================================
+   LAYOUT
+======================================== */
+
+.container {
+  background: white;
+  padding: 35px 30px 40px;
+  border-radius: 20px;
+  box-shadow: 0 15px 40px rgba(0,0,0,0.12);
+  width: 95%;
+  max-width: 420px;
+  text-align: center;
+}
+
+.loading-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: white;
+  z-index: 1000;
+  transition: opacity .35s ease;
+}
+
+.loading-overlay.hide{
+  opacity:0;
+  pointer-events:none;
+}
+
+.loading-box{
+  font-size:18px;
+  font-weight:600;
+  color:#333;
+  text-align:center;
+}
+
+.logo {
+  width: 220px;
+  margin: 10px auto 25px;
+  display: block;
+}
+
+h2 {
+  margin-top: 0;
+  margin-bottom: 30px;
+}
+
+
+/* ========================================
+   DISPLAY / INPUT
+======================================== */
+
+.display-group {
+  position: relative;
+}
+
+#display {
+  font-size: min(36px, 8vw);
+  height: 65px;
+  line-height: 65px;
+  border: 2px solid #79C3E6;
+  border-radius: 12px;
+  margin-bottom: 20px;
+  letter-spacing: 2px;
+  background: #F8FCFF;
+}
+
+#display.placeholder{
+  color:#9aa7b1;
+  letter-spacing:1px;
+  font-size:20px;
+}
+
+.floating-label {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  color: #9aa7b1;
+  background: transparent;
+  font-size: 16px;
+  padding: 0 6px;
+  transition: all 0.2s ease;
+  pointer-events: none;
+}
+
+.display-group.active .floating-label {
+  top:-8px;
+  left: 20%;
+  transform: translate(-50%, 0);
+  font-size: 12px;
+  color: #4FA3CC;
+  background: white;
+}
+
+.display-group.active #display {
+  border-color: #4FA3CC;
+}
+
+
+/* ========================================
+   BUTTONS
+======================================== */
+
+button {
+  all: unset;
+  display: inline-block;
+  box-sizing: border-box;
+  min-height: 70px;
+  font-size: 24px;
+  padding: 18px;
+  border-radius: 14px;
+  border: none;
+  background: #6AB6DA;
+  color: white;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.1s ease;
+  transform: translateY(2px);
+  box-shadow: 0 2px 0 #4FA3CC;
+  -webkit-tap-highlight-color:transparent;
+}
+
+button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+button:hover {
+  background: #4FA3CC;
+  transform: translateY(-2px);
+}
+
+button:active {
+  transform: scale(0.97) translateY(2px);
+  box-shadow: 0 2px 0 #4FA3CC;
+  opacity: 0.7;
+}
+
+#enterBtn {
+  grid-column: 3;
+  color: white;
+  background: #2ecc71;
+  box-shadow: 0 4px 0 #27ae60;
+  font-size: 24px;
+  height: 100%;
+}
+
+#enterBtn:hover {
+  background: #27ae60;
+}
+
+
+/* ========================================
+   KEYPAD
+======================================== */
+
+.keypad {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 15px;
+}
+
+.keypad button {
+  border: 1.5px solid #e0e7ef;
+  box-shadow: 0 4px 0 #cfd9e5;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  line-height: 1;
+}
+
+.keypad button:nth-last-child(3) {
+  grid-column: 1;
+  background: #f39c12;
+  box-shadow: 0 4px 0 #d35400;
+  font-size: 28px;
+}
+
+.keypad button:nth-last-child(2) {
+  grid-column: 2;
+}
+
+
+/* ========================================
+   STATUS / PROGRESS
+======================================== */
+
+#status {
+  height: 50px;
+  min-height: 50px;
+  margin-bottom: 15px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  text-align: center;
+  font-weight: 600;
+  line-height: 1.2;
+  border: none;
+  background: transparent;
+  overflow: hidden;
+  transition: all 0.2s ease;
+  flex-shrink: 0;
+}
+
+.loading{
+  animation: blink 1s infinite;
+}
+
+.status-loading {
+  color: black;
+}
+
+.progress-bar{
+  width:100%;
+  height:8px;
+  background:#e0e7ef;
+  border-radius:10px;
+  overflow:hidden;
+  margin-top:10px;
+}
+
+.progress-bar.loading #progressFill{
+  animation: progressFlow 1.4s linear infinite;
+}
+
+#progressFill{
+  width:0%;
+  height:100%;
+  background: linear-gradient(
+    90deg,
+    #4FA3CC 25%,
+    #7fc7e8 37%,
+    #4FA3CC 63%
+  );
+  background-size:40px 100%;
+  transition:width .25s ease;
+}
+
+#progressText{
+  font-size:12px;
+  margin-top:6px;
+  text-align:center;
+  color:#666;
+}
+
+/* ========================================
+   COLLECTION / VERSION
+======================================== */
+
+.collection-link-wrapper{
+  margin-bottom:18px;
+  display:none;
+  justify-content:center;
+}
+
+.collection-link{
+  display:inline-flex;
+  align-items:center;
+  gap:8px;
+  padding:10px 18px;
+  border-radius:999px;
+  background:#fff7d6;
+  color:#9a6700;
+  text-decoration:none;
+  font-weight:700;
+  box-shadow:0 4px 12px rgba(255,200,0,.15);
+  transition:.2s ease;
+}
+
+.collection-link:hover{
+  transform:translateY(-2px) scale(1.03);
+  background:#ffe89a;
+}
+
+#versionLabel{
+  margin-top:12px;
+  font-size:12px;
+  color:#9aa7b1;
+  text-align:center;
+}
+
+
+/* ========================================
+   ONLINE STATUS
+======================================== */
+
+#onlineStatus {
+  position: fixed;
+  top: 15px;
+  right: 15px;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  border: 2px solid white;
+  box-shadow: 0 0 5px rgba(0,0,0,0.2);
+  transition: background 0.3s;
+}
+
+.online {
+  background: #2ecc71;
+}
+
+.offline {
+  background: #e74c3c;
+  animation: blink 1s infinite;
+}
+
+
+/* ========================================
+   REWARD / LOADING
+======================================== */
+
+.reward-stage{
+  position:relative;
+  display:inline-flex;
+  justify-content:center;
+  align-items:center;
+  width:140px;
+  height:140px;
+  margin-top:10px;
+  margin-bottom:8px;
+}
+
+#loadingAnimation {
+  font-size:96px;
+  margin-bottom:10px;
+  animation: floaty 1.5s ease-in-out infinite;
+  transition: transform 0.2s ease;
+}
+
+#loadingAnimation.change {
+  transform: scale(1.3) rotate(10deg);
+}
+
+.loading-text{
+  margin-top:10px;
+  line-height:1.5;
+}
+
+.reward-badge{
+  position:absolute;
+  top:6px;
+  right:-4px;
+  padding:7px 14px;
+  border-radius:999px;
+  background:
+    linear-gradient(
+      135deg,
+      #ffd84d 0%,
+      #ffbe0b 45%,
+      #ff9f1c 100%
+    );
+  border:3px solid white;
+  color:white;
+  font-size:11px;
+  font-weight:900;
+  letter-spacing:1px;
+  box-shadow:
+    0 0 0 4px rgba(255,215,0,.15),
+    0 10px 22px rgba(255,190,11,.45),
+    inset 0 2px 4px rgba(255,255,255,.55);
+  transform: rotate(14deg);
+  z-index:20;
+  overflow:hidden;
+  animation:
+    newBadgePop .35s ease,
+    badgeFloat 2s ease-in-out infinite;
+}
+
+.reward-badge::before{
+  content:"";
+  position:absolute;
+  top:-30%;
+  left:-40%;
+  width:40%;
+  height:180%;
+  background:
+    linear-gradient(
+      90deg,
+      transparent,
+      rgba(255,255,255,.85),
+      transparent
+    );
+  transform:rotate(25deg);
+  animation: badgeShine 2.2s linear infinite;
+}
+
+/* ========================================
+   REWARD RESULT
+======================================== */
+
+.reward-result{
+  text-align:center;
+}
+
+.reward-title{
+  font-size:18px;
+  color:#666;
+}
+
+.reward-name{
+  font-size:26px;
+  font-weight:800;
+  margin-top:6px;
+  color:#222;
+}
+
+.reward-badges{
+  margin-top:10px;
+  display:flex;
+  justify-content:center;
+  align-items:center;
+  gap:8px;
+  flex-wrap:wrap;
+}
+
+.reward-rarity{
+  padding:6px 14px;
+  border-radius:999px;
+  font-size:12px;
+  font-weight:800;
+  letter-spacing:.5px;
+}
+
+/* ========================================
+   RARITY EFFECTS
+======================================== */
+
+#loadingAnimation[data-rarity="Rare"]{
+  filter: drop-shadow(0 0 18px rgba(59,130,246,.7));
+}
+
+#loadingAnimation[data-rarity="Epic"]{
+  filter: drop-shadow(0 0 20px rgba(168,85,247,.7));
+}
+
+#loadingAnimation[data-rarity="Ultra"]{
+  filter: drop-shadow(0 0 24px rgba(255,215,0,.75));
+}
+
+#loadingAnimation[data-rarity="Legendary"]{
+  filter: drop-shadow(0 0 30px rgba(255,140,0,.9));
+}
+
+
+/* ========================================
+   REWARD BUTTON
+======================================== */
+
+.reward-confirm{
+  position:relative;
+  margin-top:26px;
+  min-width:220px;
+  padding:18px 30px;
+  border:none;
+  border-radius:24px;
+  font-size:22px;
+  font-weight:800;
+  color:white;
+  background:
+    linear-gradient(
+      180deg,
+      #5cf08d 0%,
+      #22c55e 55%,
+      #16a34a 100%
+    );
+  box-shadow:
+    0 14px 30px rgba(34,197,94,.32),
+    inset 0 2px 0 rgba(255,255,255,.45);
+  overflow:hidden;
+  transition:
+    transform .15s ease,
+    box-shadow .15s ease;
+}
+
+.reward-confirm::before{
+  content:"";
+  position:absolute;
+  top:-20%;
+  left:-30%;
+  width:30%;
+  height:160%;
+  background:
+    linear-gradient(
+      90deg,
+      transparent,
+      rgba(255,255,255,.75),
+      transparent
+    );
+  transform:rotate(24deg);
+  animation: buttonShine 2.8s linear infinite;
+}
+
+.reward-confirm:hover{
+  transform:
+    translateY(-2px)
+    scale(1.02);
+  filter:brightness(1.03);
+}
+
+.reward-confirm:active{
+  transform:translateY(2px);
+  box-shadow:
+    0 4px 10px rgba(34,197,94,.2);
+}
+
+
+/* ========================================
+   EXTRA REWARD
+======================================== */
+
+.extra-reward{
+  margin-top:24px;
+  font-size:18px;
+  opacity:.85;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  gap:10px;
+}
+
+.reward-mini{
+  font-size:28px;
+}
+
+.extra-reward-info{
+  display:flex;
+  flex-direction:column;
+  align-items:flex-start;
+  line-height:1.2;
+}
+
+.extra-reward-name{
+  font-size:14px;
+  opacity:.7;
+}
+
+
+/* ========================================
+   EXTRA POPUP
+======================================== */
+
+.loading-box.extra-mode{
+  min-width:320px;
+  padding:32px 30px;
+  border-radius:32px;
+  background:
+    linear-gradient(
+      180deg,
+      #ffffff 0%,
+      #f7fbff 100%
+    );
+  box-shadow:
+    0 24px 60px rgba(0,0,0,.08);
+  animation: extraPopupShow .25s ease;
+}
+
+.extra-popup{
+  display:flex;
+  flex-direction:column;
+  align-items:center;
+  margin-top:4px;
+}
+
+.extra-title{
+  font-size:30px;
+  font-weight:900;
+  color:#1e293b;
+  letter-spacing:-1px;
+  margin-top:6px;
+  margin-bottom:14px;
+}
+
+.extra-desc{
+  font-size:42px;
+  font-weight:900;
+  line-height:1.05;
+  color:#2563eb;
+  text-shadow:
+    0 2px 10px rgba(37,99,235,.12);
+  margin-bottom:14px;
+}
+
+.extra-sub{
+  font-size:18px;
+  font-weight:700;
+  color:#64748b;
+  line-height:1.4;
+}
+
+.loading-box.extra-mode .reward-confirm{
+  margin-top:28px;
+  min-width:240px;
+  background:
+    linear-gradient(
+      180deg,
+      #60a5fa 0%,
+      #3b82f6 55%,
+      #2563eb 100%
+    );
+  box-shadow:
+    0 14px 34px rgba(59,130,246,.32),
+    inset 0 2px 0 rgba(255,255,255,.35);
+}
+
+/* ========================================
+   ANIMATIONS
+======================================== */
+
+@keyframes blink{
+  0%{opacity:1}
+  50%{opacity:0.3}
+  100%{opacity:1}
+}
+
+@keyframes progressFlow{
+  0%{
+    background-position:0 0;
+  }
+  100%{
+    background-position:40px 0;
+  }
+}
+
+@keyframes floaty {
+  0% {
+    transform: translateY(0) rotate(0deg);
+  }
+
+  50% {
+    transform: translateY(-12px) rotate(5deg);
+  }
+
+  100% {
+    transform: translateY(0) rotate(0deg);
+  }
+}
+
+@keyframes badgeShine{
+  0%{
+    left:-50%;
+  }
+
+  100%{
+    left:140%;
+  }
+}
+
+@keyframes badgeFloat{
+  0%{
+    transform:
+      rotate(14deg)
+      translateY(0);
+  }
+
+  50%{
+    transform:
+      rotate(14deg)
+      translateY(-4px);
+  }
+
+  100%{
+    transform:
+      rotate(14deg)
+      translateY(0);
+  }
+}
+
+@keyframes sparkleFloat{
+  0%{
+    transform:translateY(0);
+    opacity:.7;
+  }
+
+  50%{
+    transform:translateY(-6px);
+    opacity:1;
+  }
+
+  100%{
+    transform:translateY(0);
+    opacity:.7;
+  }
+}
+
+@keyframes newBadgePop{
+  0%{
+    opacity:0;
+    transform:
+      scale(.4)
+      rotate(-10deg);
+  }
+
+  70%{
+    opacity:1;
+    transform:
+      scale(1.12)
+      rotate(14deg);
+  }
+
+  100%{
+    transform:
+      scale(1)
+      rotate(12deg);
+  }
+}
+
+@keyframes buttonShine{
+  0%{
+    left:-40%;
+  }
+
+  100%{
+    left:140%;
+  }
+}
+
+@keyframes confirmPop{
+  from{
+    opacity:0;
+    transform:scale(.8);
+  }
+
+  to{
+    opacity:1;
+    transform:scale(1);
+  }
+}
+
+@keyframes extraPopupShow{
+  from{
+    opacity:0;
+    transform:
+      translateY(10px)
+      scale(.96);
+  }
+
+  to{
+    opacity:1;
+    transform:
+      translateY(0)
+      scale(1);
+  }
+}
+
+@keyframes legendaryFlow{
+  0%{
+    background-position:0% 50%;
+  }
+
+  100%{
+    background-position:100% 50%;
+  }
+}

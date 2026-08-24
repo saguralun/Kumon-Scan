@@ -1,0 +1,95 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, 
+  initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+
+<link rel="manifest" href="/manifest/manifest-checkin.json">
+
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="apple-touch-icon" href="/icons/apple-touch-icon-checkin.png">
+
+<link rel="icon" type="image/png" sizes="192x192" href="icons/icon-checkin-192.png">
+
+<meta name="theme-color" content="#1f4ea3">
+
+<title>Student Check In</title>
+
+<link rel="stylesheet" href="./checkin/css/checkin.css">
+
+</head>
+
+<body>
+<div id="onlineStatus" class="online"></div>
+<div class="container">
+  <img src="kumon-method-logo.svg" id="adminLogo" class="logo" alt="Kumon Logo">
+  <h2>Student Check In</h2>
+  <div
+      class="collection-link-wrapper"
+      id="collectionLinkWrapper"
+    >
+    <a href="collection.html" class="collection-link">
+      🌟 My Collection
+    </a>
+  </div>
+  <div class="display-group" id="displayGroup">
+    <div id="display" class="placeholder"></div>
+    <label class="floating-label">กรอกรหัสนักเรียน</label>
+  </div>
+  <div id="status"></div>
+	<div id="loadingOverlay" class="loading-overlay">
+  	<div>
+     	<div class="loading-box">
+        <div class="reward-stage">
+          <div id="loadingAnimation">
+            🐻
+          </div>
+          <div
+            id="rewardBadge"
+            class="reward-badge hidden"
+          >
+            NEW
+          </div>
+        </div>
+        <div class="loading-text">
+          🔄 กำลังเชื่อมต่อระบบ...
+        </div>
+        <button
+          id="rewardConfirmBtn"
+          class="reward-confirm hidden"
+        >
+          ตกลง
+        </button>
+      </div>
+    	<div class="progress-bar">
+      	<div id="progressFill"></div>
+    	</div>
+    		<div id="progressText"></div>
+  	</div>
+	</div>
+  <div class="keypad">
+    <button onclick="press(1)">1</button>
+    <button onclick="press(2)">2</button>
+    <button onclick="press(3)">3</button>
+    <button onclick="press(4)">4</button>
+    <button onclick="press(5)">5</button>
+    <button onclick="press(6)">6</button>
+    <button onclick="press(7)">7</button>
+    <button onclick="press(8)">8</button>
+    <button onclick="press(9)">9</button>
+    <button onclick="backspace()">⌫</button>
+    <button onclick="press(0)">0</button>
+    <button id="enterBtn" type="button" onclick="submitID()">Enter</button>
+  </div>
+  <div id="versionLabel"></div>
+</div>
+
+<script type="module" src="./checkin/js/checkin.js"></script>
+
+</body>
+</html>

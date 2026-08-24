@@ -1,0 +1,390 @@
+<!DOCTYPE html>
+
+<html lang="th">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Bingo</title>
+
+<style>
+body {
+  margin: 0;
+  font-family: sans-serif;
+  background: linear-gradient(135deg, #eef7ff, #fce4ec);
+}
+
+.app {
+  max-width: 420px;
+  margin: auto;
+  padding: 10px;
+}
+
+.header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.nav-btn {
+  background: white;
+  padding: 6px 12px;
+  border-radius: 10px;
+  cursor: pointer;
+}
+
+.board {
+  background: white;
+  padding: 15px;
+  border-radius: 20px;
+  margin-top: 10px;
+}
+
+.grid {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 8px;
+}
+
+.cell {
+  aspect-ratio: 1;
+  border-radius: 12px;
+  background: #f4f7fb;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  font-size: 24px;
+  background: #e5e7eb; /* เทา */
+  opacity: 0.6;
+  position: relative;
+}
+
+.badge {
+  position: absolute;
+  bottom: 4px;
+  right: 4px;
+  border: 1px solid rgba(255,255,255,0.4);
+  background: #6366f1;
+  color: white;
+  box-shadow: 0 2px 6px rgba(0,0,0,0.2);
+
+  font-size: 11px;
+  padding: 2px 6px;
+  border-radius: 10px;
+
+}
+
+.cell.ultra.open .badge {
+  background: gold;
+  color: black;
+}
+
+.cell.open {
+  background: linear-gradient(135deg, #4facfe, #00f2fe);
+  color: white;
+  opacity: 1;
+}
+
+.cell.ultra {
+  background: #facc15; /* เหลืองหม่น */
+  opacity: 0.7;
+}
+
+.cell.ultra.open {
+  background: gold;
+  color: black;
+  opacity: 1;
+  box-shadow: 0 0 12px gold;
+}
+
+.wrapper {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.board-row {
+  display: flex;
+  gap: 8px;
+}
+
+.grid {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 8px;
+}
+
+.side {
+  display: grid;
+  grid-template-rows: repeat(5, 1fr);
+  gap: 8px;
+}
+
+.bottom {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.diag {
+  display: flex;
+  gap: 20px;
+  margin-top: 10px;
+}
+
+.check {
+  width: 40px;
+  height: 40px;
+  border-radius: 10px;
+  background: #e5e7eb;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.check.claimable {
+  background: #22c55e;
+  color: white;
+  cursor: pointer;
+}
+
+</style>
+
+</head>
+
+<body>
+
+<div class="app">
+
+  <div class="header">
+    <div class="nav-btn" onclick="prevBoard()">←</div>
+    <div id="title">Animal</div>
+    <div class="nav-btn" onclick="nextBoard()">→</div>
+  </div>
+
+  <div class="wrapper">
+
+  <div class="board-row">
+    <div id="grid" class="grid"></div>
+    <div id="rowChecks" class="side"></div>
+  </div>
+
+  <div id="colChecks" class="bottom"></div>
+
+  <div id="diagChecks" class="diag"></div>
+
+</div>
+
+</div>
+
+<script type="module">
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
+import { getFirestore, doc, getDoc, setDoc } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
+
+// ===== Firebase =====
+const firebaseConfig = {
+  apiKey: "AIzaSyBfJ9F94tdUw6sIY8ffUPV0AKxXWzZig8s",
+  authDomain: "scan-qrcode-kumon.firebaseapp.com",
+  projectId: "scan-qrcode-kumon",
+};
+
+const app = initializeApp(firebaseConfig);
+const db = getFirestore(app);
+
+// ===== STATE =====
+const state = {
+  current: 0,
+  boards: [],
+  inventory: {}
+};
+
+// ===== DATA =====
+const animals = [
+  "🐻","🐱","🐶","🐼","🐸","🦊","🐵","🐯",
+  "🐰","🐨","🐹","🐷","🐮","🐤","🐧","🦄",
+  "🐢","🐙","🐬","🦕","🦖","🐝","🦋","🐞",
+];
+
+const magic = ["⭐","✨","🌟","💫","🌈","☀️","🌙","⚡"];
+const sweets = ["🍭","🍩","🍪","🧁","🍫","🍰","🍦","🍓"];
+const fun = ["🎈","🎉","🎁","🎮","🪀","🧸","🚀","🚗"];
+
+const ultra = ["🔮","💎"];
+const funAll = [...magic, ...sweets, ...fun];
+
+function render() {
+  const board = state.boards[state.current].grid;
+
+  const owned = new Set(
+    Object.values(state.inventory).map(i => i.icon)
+  );
+
+  // ===== render grid (5x5 จริง) =====
+  const el = document.getElementById("grid");
+  el.innerHTML = "";
+
+  board.forEach((cell, i) => {
+    const div = document.createElement("div");
+    div.className = "cell";
+
+    if (owned.has(cell)) div.classList.add("open");
+    if (i === 12) div.classList.add("ultra");
+
+    div.innerText = cell;
+    el.appendChild(div);
+  });
+
+  // ===== render ส่วนอื่น =====
+  renderRows(board, owned);
+  renderCols(board, owned);
+  renderDiag(board, owned);
+}
+
+// ===== shuffle =====
+function shuffle(arr) {
+  return [...arr].sort(() => Math.random() - 0.5);
+}
+
+// ===== build board =====
+function buildBoard(data, ultraEmoji) {
+  const shuffled = shuffle(data);
+  const grid = [];
+  let index = 0;
+
+  for (let i = 0; i < 25; i++) {
+    if (i === 12) {
+      grid.push(ultraEmoji);
+    } else {
+      grid.push(shuffled[index++]);
+    }
+  }
+
+  return grid;
+}
+
+// ===== render =====
+
+// ===== navigation =====
+window.nextBoard = function() {
+  state.current = (state.current + 1) % state.boards.length;
+  render();
+}
+
+window.prevBoard = function() {
+  state.current = (state.current - 1 + state.boards.length) % state.boards.length;
+  render();
+}
+
+// ===== load or create =====
+async function loadOrCreateBingo(studentId) {
+  const ref = doc(db, "students", studentId);
+  const snap = await getDoc(ref);
+
+  const data = snap.data();
+
+  if (data?.bingo) {
+    return {
+      bingo: data.bingo,
+      inventory: data.inventory || {}
+    };
+  }
+
+  const newBingo = {
+    animalBoard: buildBoard(animals, ultra[0]),
+    funBoard: buildBoard(funAll, ultra[1])
+  };
+
+  await setDoc(ref, { bingo: newBingo }, { merge: true });
+
+  return {
+    bingo: newBingo,
+    inventory: {}
+  };
+}
+
+// ===== init =====
+async function init() {
+  const studentId = "512";
+
+  const { bingo, inventory } = await loadOrCreateBingo(studentId);
+
+  state.boards = [
+    { title: "🐻 Animal", grid: bingo.animalBoard },
+    { title: "🎉 Fun", grid: bingo.funBoard }
+  ];
+
+  state.inventory = inventory;
+
+  render(); // 👈 สำคัญ
+}
+
+function renderRows(board, owned) {
+  const el = document.getElementById("rowChecks");
+  el.innerHTML = "";
+
+  for (let r = 0; r < 5; r++) {
+    const row = board.slice(r*5, r*5+5);
+    const ok = row.every(x => owned.has(x));
+
+    const div = document.createElement("div");
+    div.className = "check";
+
+    if (ok) {
+      div.classList.add("claimable");
+      div.innerText = "🎁";
+      div.onclick = () => claim("row", r);
+    }
+
+    el.appendChild(div);
+  }
+}
+
+function renderCols(board, owned) {
+  const el = document.getElementById("colChecks");
+  el.innerHTML = "";
+
+  for (let c = 0; c < 5; c++) {
+    const col = [0,1,2,3,4].map(i => board[i*5+c]);
+    const ok = col.every(x => owned.has(x));
+
+    const div = document.createElement("div");
+    div.className = "check";
+
+    if (ok) {
+      div.classList.add("claimable");
+      div.innerText = "🎁";
+      div.onclick = () => claim("col", c);
+    }
+
+    el.appendChild(div);
+  }
+}
+
+function renderDiag(board, owned) {
+  const el = document.getElementById("diagChecks");
+  el.innerHTML = "";
+
+  const diag1 = [0,1,2,3,4].map(i => board[i*5+i]);
+  const diag2 = [0,1,2,3,4].map(i => board[i*5+(4-i)]);
+
+  [diag1, diag2].forEach((diag, i) => {
+    const ok = diag.every(x => owned.has(x));
+
+    const div = document.createElement("div");
+    div.className = "check";
+
+    if (ok) {
+      div.classList.add("claimable");
+      div.innerText = "🎁";
+      div.onclick = () => claim("diag", i);
+    }
+
+    el.appendChild(div);
+  });
+}
+
+init();
+</script>
+
+</body>
+</html>

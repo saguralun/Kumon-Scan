@@ -1,0 +1,3063 @@
+<!doctype html>
+<html>
+<head>
+<link rel="manifest" href="/manifest/manifest-schedule.json" />
+
+<meta name="apple-mobile-web-app-capable" content="yes" />
+<meta name="mobile-web-app-capable" content="yes" />
+<meta name="apple-mobile-web-app-status-bar-style" content="default" />
+
+<meta name="apple-mobile-web-app-title" content="Kumon Schedule" />
+
+<link rel="apple-touch-icon" href="/icons/icon-Schedule-180.png" />
+<link
+  rel="icon"
+  type="image/png"
+  sizes="192x192"
+  href="icons/icon-schedule-192.png"
+/>
+
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Daily Schedule</title>
+
+<link
+  rel="stylesheet"
+  href="./schedule/css/schedule.css"
+/>
+
+</head>
+<body>
+<div class="container">
+  <div class="top-bar">
+    <div class="title-group">
+      <h2 id="pageTitle">กำลังโหลดวันที่...</h2>
+    </div>
+
+    <div class="right-group">
+      <div id="liveClock" class="live-clock">00:00:00</div>
+      <div id="versionLabel" class="version-label">
+        <span id="versionText">Version</span>
+      </div>
+    </div>
+  </div>
+
+  <div class="legend">
+    <span class="legend-icon active-icon">
+      <span>เรียน</span>
+      <span id="count-active">0</span>
+    </span>
+    <span class="legend-icon completed-icon">
+      <span>เสร็จ</span>
+      <span id="count-completed">0</span>
+    </span>
+    <span class="legend-icon takehome-icon">
+      <span>รับกลับ</span>
+      <span id="count-takehome">0</span>
+    </span>
+    <span class="legend-icon plan-icon">
+      <span>แผน</span>
+      <span id="count-planned">0</span>
+    </span>
+  </div>
+
+  <div class="search-bar">
+
+    <input
+      id="studentSearch"
+      type="text"
+      placeholder="🔍 ค้นหาชื่อนักเรียน / รหัส"
+      autocomplete="off"
+    />
+
+    <div class="search-actions">
+
+      <button id="searchPrev">◀</button>
+
+      <span id="searchCount">
+        0 / 0
+      </span>
+
+      <button id="searchNext">▶</button>
+
+      <button id="searchClear">
+        ✖
+      </button>
+
+    </div>
+
+  </div>
+
+  <div class="table-wrapper">
+
+    <table id="desktopSchedule">
+
+      <thead>
+        <tr class="compact-row">
+          <th
+            colspan="2"
+            class="time-header corner-header"
+          >
+            ช่วงเวลา
+          </th>
+
+          <th rowspan="2" class="subject-header">
+            <span class="main-label">ME</span>
+            <span class="sub-label">คณิตศาสตร์</span>
+          </th>
+          <th rowspan="2" class="subject-header">
+            <span class="main-label">EFL</span>
+            <span class="sub-label">ภาษาอังกฤษ</span>
+          </th>
+          <th rowspan="2" class="subject-header">
+            <span class="main-label">TRP</span>
+            <span class="sub-label">ภาษาไทย</span>
+          </th>
+        </tr>
+        <tr class="compact-row">
+          <th class="time-sub">ชม.</th>
+          <th class="time-sub">นาที</th>
+        </tr>
+      </thead>
+      <tbody id="scheduleBody"></tbody>
+    </table>
+
+    <div id="mobileSchedule"></div>
+
+  </div>
+</div>
+<div id="contextMenu" class="context-menu"></div>
+<div id="menuOverlay" class="menu-overlay"></div>
+
+<div id="confirmModal" class="modal">
+  <div class="modal-box">
+    <h3 id="confirmTitle"></h3>
+    <p id="confirmDesc"></p>
+    <div class="modal-actions">
+      <button id="cancelBtn">
+        ยกเลิก
+      </button>
+      <button id="confirmBtn">
+        ยืนยัน
+      </button>
+    </div>
+  </div>
+</div>
+
+<div id="addWSModal" class="modal">
+  <div class="modal-box">
+    <h3 id="addWSTitle">
+      เพิ่มงานใหม่
+    </h3>
+    <p id="addWSDesc"></p>
+    <div class="ws-modal-layout">
+      <div class="ws-select-group">
+        <label
+          for="addWSLevelSelect"
+          class="ws-select-label"
+        >
+          Level
+        </label>
+        <div id="levelPicker"></div>
+      </div>
+      <div
+        id="addWSSelectWrap"
+        class="ws-select-group"
+      >
+        <label
+          for="addWSSelect"
+          class="ws-select-label"
+        >
+          WS
+        </label>
+        <div id="wsPicker"></div>
+      </div>
+    </div>
+    <div
+      class="modal-actions modal-actions-column"
+    >
+      <button id="addWSConfirmBtn">
+        ➕ ยืนยันเพิ่มงาน
+      </button>
+      <button id="addWSCancelLastBtn">
+        ↩️ ยกเลิกงานล่าสุด
+      </button>
+      <button id="addWSCloseBtn">
+        ❌ ยกเลิก
+      </button>
+    </div>
+  </div>
+</div>
+<div id="toast">บันทึกสำเร็จ ✅</div>
+
+<div id="versionUpdateOverlay" class="version-update-overlay hidden">
+  <div class="version-update-box">
+    <div class="version-update-icon">🔄</div>
+
+    <h2>ระบบมีการอัปเดต</h2>
+
+    <p id="versionUpdateText">
+      กรุณารีโหลดเพื่อใช้งานเวอร์ชันล่าสุด
+    </p>
+
+    <button id="versionReloadBtn">
+      รีโหลดระบบ
+    </button>
+  </div>
+</div>
+
+<script type="module">
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
+import {
+  getFirestore,
+  collection,
+  query,
+  where,
+  orderBy,
+  onSnapshot,
+  getDocs,
+  doc,
+  getDoc,
+  updateDoc,
+  deleteField,
+  runTransaction,
+  increment,
+} from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
+
+import {
+  APP_VERSION,
+  getActiveStudent,
+  createAttendance,
+  studentUpdateWeeklyPlan,
+  moveToCheckinSchedule,
+  checkVersionAndReload,
+  getTodayThai,
+  getNow,
+  getTodayWeekday,
+  formatToSlotKey,
+  formatFirestoreTime,
+  debugLog,
+  logError,
+  WheelPicker,
+} from "/shared/index.js";
+
+import { $, qs } from "./checkin/ui/dom.js";
+const firebaseConfig = {
+  apiKey: "AIzaSyBfJ9F94tdUw6sIY8ffUPV0AKxXWzZig8s",
+  authDomain: "scan-qrcode-kumon.firebaseapp.com",
+  projectId: "scan-qrcode-kumon",
+};
+
+const app = initializeApp(firebaseConfig);
+const db = getFirestore(app);
+
+// Test Date ใส่หัวแบบนี้ schedule.html?testDate=2026-03-05
+const params = 
+  new URLSearchParams(window.location.search);
+const testDateParam = 
+  params.get("testDate");
+const TEST_DATE = 
+  testDateParam 
+    ? new Date(testDateParam) 
+    : null;
+
+// กำหนดวันสอน: จันทร์(1) พฤหัส(4) ศุกร์(5) เสาร์(6)
+const teachingDays = 
+  [1, 4, 5, 6];
+
+let isProcessing = false;
+let firstLoad = true;
+let currentSlots = {};
+let mobileSubject = "ME";
+let searchTimer = null;
+let searchResults = [];
+let currentSearchIndex = -1;
+
+const searchInput =
+  $("studentSearch");
+
+const searchCount =
+  $("searchCount");
+
+const ENABLE_HOLIDAY_MODE = false;
+
+function isTeachingDay(
+  date = getNow()
+) {
+
+  const day = 
+    getTodayWeekday(date);
+
+  return teachingDays.includes(day);
+  
+}
+
+function showNoClassDay() {
+
+  document.body.classList.add("holiday-mode");
+
+  const container = 
+    qs(".container");
+  const nextClass = 
+    getNextTeachingDay();
+
+  const thaiDate = 
+    nextClass.toLocaleDateString(
+      "th-TH", {
+        weekday: "long",
+        year: "numeric",
+        month: "long",
+        day: "numeric",
+      }
+    );
+
+  qs(".legend").style.display = 
+    "none";
+  qs("table").style.display = 
+    "none";
+
+  container.insertAdjacentHTML(
+    "beforeend",
+    `
+      <div class="holiday-card">
+
+        <h2>
+          📅 วันนี้ไม่มีการเรียนการสอน
+        </h2>
+
+        <p>
+          ตารางเรียนเปิดเฉพาะวัน จันทร์ • พฤหัส • ศุกร์ • เสาร์
+        </p>
+
+        <p class="next-class-label">
+          📌 คลาสเรียนถัดไป ${thaiDate}
+        </p>
+
+      </div>
+    `,
+  );
+
+}
+
+function getNextTeachingDay() {
+
+  const today = getNow();
+
+  for (let i = 1; i <= 7; i++) {
+
+    const next = new Date(today);
+    next.setDate(today.getDate() + i);
+
+    if (teachingDays.includes(next.getDay())) {
+      return next;
+    }
+
+  }
+
+  return null;
+
+}
+
+function showVersion() {
+
+  $("versionText").innerText =
+    `v ${APP_VERSION}`;
+
+}
+
+function loadSchedule() {
+
+  const currentDate =
+    getTodayThai();
+
+  const slotsRef =
+    query(
+      collection(
+        db,
+        "dailySchedule",
+        currentDate,
+        "slots"
+      ),
+      orderBy("__name__")
+    );
+
+  renderSkeleton();
+
+  onSnapshot(slotsRef, (snapshot) => {
+
+    const slots = {};
+
+    snapshot.forEach((doc) => {
+
+      slots[doc.id] =
+        doc.data();
+
+    });
+
+    // snapshot รอบแรกไม่ต้องแจ้งเตือน
+    if (!firstLoad) {
+      detectScheduleChanges(currentSlots, slots);
+    }
+
+    currentSlots = slots;
+
+    renderSchedule(slots);
+    highlightCurrentSlot();
+    updateTotalCounts(slots);
+
+    firstLoad = false;
+  });
+
+}
+
+function showVersionUpdate(serverVersion){
+
+  $("versionUpdateText").innerHTML =
+    `
+    พบเวอร์ชันใหม่<br>
+    ${APP_VERSION} ➜ ${serverVersion}
+    `;
+
+  $("versionUpdateOverlay")
+    .classList.remove("hidden");
+
+  $("versionReloadBtn").onclick = () => {
+    location.reload();
+  };
+
+}
+
+async function initPage() {
+
+  const config =
+    await checkVersionAndReload(db);
+
+  if (!config.ok) {
+    showVersionUpdate(config.serverVersion);
+    return;
+  }
+
+  if (
+    ENABLE_HOLIDAY_MODE &&
+    !isTeachingDay()
+  ) {
+    showNoClassDay();
+    return;
+  }
+
+  showVersion();
+
+  loadSchedule();
+
+  initPageUI();
+
+}
+
+(async () => {
+
+  await initPage();
+
+})();
+
+function detectScheduleChanges(oldSlots, newSlots) {
+
+  const subjects = ["ME", "EFL", "TRP"];
+
+  Object.entries(newSlots).forEach(([slotKey, slotData]) => {
+
+    subjects.forEach(subject => {
+
+      const newSubject =
+        slotData?.subjects?.[subject] || {};
+
+      const oldSubject =
+        oldSlots?.[slotKey]?.subjects?.[subject] || {};
+
+      // planned -> checkedIn
+      Object.entries(newSubject.checkedIn || {})
+        .forEach(([studentID, student]) => {
+
+          const wasPlanned =
+            oldSubject?.planned?.[studentID];
+
+          if (wasPlanned) {
+            showToast(
+              `🟢 ${student.nickname || studentID} เข้าเรียนแล้ว`
+            );
+          }
+
+        });
+
+      // checkedIn -> completed
+      Object.entries(newSubject.completed || {})
+        .forEach(([studentID, student]) => {
+
+          const wasActive =
+            oldSubject?.checkedIn?.[studentID];
+
+          if (wasActive) {
+            showToast(
+              `🔵 ${student.nickname || studentID} เรียนเสร็จแล้ว`
+            );
+          }
+
+        });
+
+      // planned -> takeHome
+      Object.entries(newSubject.takeHome || {})
+        .forEach(([studentID, student]) => {
+
+          const wasPlanned =
+            oldSubject?.planned?.[studentID];
+
+          if (wasPlanned) {
+            showToast(
+              `🟠 ${student.nickname || studentID} รับการบ้านกลับ`
+            );
+          }
+
+        });
+
+    });
+
+  });
+
+}
+
+function switchMobileSubject(subject){
+
+  if(subject === mobileSubject)
+    return;
+
+  mobileSubject = subject;
+
+  renderMobileSchedule(currentSlots);
+
+}
+
+const MOBILE_SUBJECTS = [
+  {
+    id: "ME",
+    icon: "📘",
+    label: "ME",
+    thai: "คณิตศาสตร์"
+  },
+  {
+    id: "EFL",
+    icon: "📙",
+    label: "EFL",
+    thai: "อังกฤษ"
+  },
+  {
+    id: "TRP",
+    icon: "📗",
+    label: "TRP",
+    thai: "ไทย"
+  },
+];
+
+const MOBILE_STATUS_GROUPS = [
+  {
+    key: "active",
+    label: "กำลังเรียน",
+    className: "active"
+  },
+  {
+    key: "completed",
+    label: "เสร็จแล้ว",
+    className: "completed"
+  },
+  {
+    key: "planned",
+    label: "แผน",
+    className: "planned"
+  },
+  {
+    key: "takehome",
+    label: "รับกลับ",
+    className: "takehome"
+  },
+  {
+    key: "unplanned",
+    label: "นอกแผน",
+    className: "unplanned"
+  },
+];
+
+function getStudentsFromSubject(
+  subjectData
+) {
+
+  const checkedIn =
+    Object.entries(subjectData.checkedIn || {})
+      .map(([id, d]) => ({
+        studentID: id,
+        ...d,
+        status: "active"
+      }));
+
+  const completed =
+    Object.entries(subjectData.completed || {})
+      .map(([id, d]) => ({
+        studentID: id,
+        ...d,
+        status: "completed"
+      }));
+
+  const planned =
+    Object.entries(subjectData.planned || {})
+      .map(([id, d]) => ({
+        studentID: id,
+        ...d,
+        status: "planned"
+      }));
+
+  const takeHome =
+    Object.entries(subjectData.takeHome || {})
+      .map(([id, d]) => ({
+        studentID: id,
+        ...d,
+        status: "takehome"
+      }));
+
+  const unplanned =
+    Object.entries(subjectData.unplanned || {})
+      .map(([id, d]) => ({
+        studentID: id,
+        ...d,
+        status: "unplanned"
+      }));
+
+  return [
+    ...checkedIn,
+    ...completed,
+    ...takeHome,
+    ...planned,
+    ...unplanned
+  ];
+}
+
+function getSubjectStudentCount(
+  slots,
+  subject
+) {
+
+  return Object.values(slots)
+    .reduce((sum, slot) => {
+
+      const subjectData =
+        slot?.subjects?.[subject] || {};
+
+      return sum +
+        getStudentsFromSubject(
+          subjectData
+        ).length;
+
+    }, 0);
+
+}
+
+function groupStudentsByStatus(
+  students
+) {
+
+  return students.reduce((groups, student) => {
+
+    groups[student.status] ??= [];
+
+    groups[student.status].push(student);
+
+    return groups;
+
+  }, {});
+
+}
+
+function sortStudents(
+  students
+) {
+
+  students.sort((a, b) => {
+
+    const p1 =
+      getStudentPriority(a);
+
+    const p2 =
+      getStudentPriority(b);
+
+    if (p1 !== p2)
+      return p1 - p2;
+
+    const timeA =
+      a.time || "99:99";
+
+    const timeB =
+      b.time || "99:99";
+
+    return timeA.localeCompare(timeB);
+
+  });
+
+}
+
+function getStudentPriority(
+  student
+) {
+
+  switch(student.status){
+
+    case "active":
+    case "completed":
+      return 1;
+
+    case "takehome":
+      return 2;
+
+    case "planned":
+      return 3;
+
+    case "unplanned":
+      return 4;
+
+    default:
+      return 99;
+  }
+
+}
+
+function createStudentElement(
+  s,
+  subject,
+  slotKey
+) {
+
+  const rawName =
+    (s.nickname || "").trim();
+
+  const nameParts =
+    rawName.split(/\s+/);
+
+  const displayName =
+    nameParts.length > 1
+      ? `${nameParts[0]} ${nameParts[1]}`
+          .substring(0, 10)
+      : rawName;
+
+  const wrapper =
+    document.createElement("div");
+
+  wrapper.className =
+    "student-wrapper";
+
+  wrapper.dataset.status =
+    s.status;
+
+  let iconClass = "plan-icon";
+
+  if (s.status === "active")
+    iconClass = "active-icon";
+  else if (s.status === "takehome")
+    iconClass = "takehome-icon";
+  else if (s.status === "completed")
+    iconClass = "completed-icon";
+  else if (s.status === "unplanned")
+    iconClass = "unplanned-icon";
+
+  const extraHtml =
+    s.status === "planned"
+      ? `<div class="badge-bottom">
+          ${renderBadges(s, "detail")}
+        </div>`
+      : (
+          s.status === "active" ||
+          s.status === "completed"
+        )
+        ? renderBadges(s, "compact")
+        : "";
+
+  wrapper.innerHTML = `
+    <div class="tooltip-id">
+      ${s.studentID}
+    </div>
+
+    <div class="student-main">
+      <span class="student-icon ${iconClass}">
+        ${displayName}
+      </span>
+
+      ${extraHtml}
+    </div>
+
+    ${
+      s.time
+        ? `<div class="mobile-time">${s.time}</div>`
+        : ""
+    }
+  `;
+
+  wrapper.addEventListener(
+    "click",
+    (e) => {
+
+      e.stopPropagation();
+
+      showMenu(
+        wrapper,
+        s,
+        subject,
+        slotKey
+      );
+
+    }
+  );
+
+  return wrapper;
+
+}
+
+function groupSlotsByHour(
+  slots
+){
+
+  const groupedByHour = {};
+
+  Object.keys(slots).forEach((slotKey) => {
+
+    const hour =
+      slotKey.split(":")[0];
+
+    if(!groupedByHour[hour]){
+      groupedByHour[hour] = [];
+    }
+
+    groupedByHour[hour].push(slotKey);
+
+  });
+
+  return groupedByHour;
+
+}
+
+function renderSubjectCell(
+  row,
+  subject,
+  slotKey,
+  slots
+){
+
+  const cell =
+    row.querySelector(`.${subject}`);
+
+  const slotData =
+    slots[slotKey] || {};
+
+  const subjectData =
+    (slotData.subjects || {})[subject] || {};
+
+  const students =
+    getStudentsFromSubject(
+      subjectData
+    );
+
+  sortStudents(students);
+
+  students.forEach((s) => {
+
+    cell.appendChild(
+      createStudentElement(
+        s,
+        subject,
+        slotKey
+      )
+    );
+
+  });
+
+}
+
+function renderSchedule(slots) {
+
+  const desktop =
+    $("desktopSchedule");
+
+  const mobile =
+    $("mobileSchedule");
+
+  if (window.innerWidth <= 768) {
+
+    desktop.style.display = "none";
+    mobile.style.display = "block";
+
+    renderMobileSchedule(slots);
+
+  } else {
+
+    desktop.style.display = "";
+    mobile.style.display = "none";
+
+    renderDesktopSchedule(slots);
+
+  }
+
+}
+
+function renderDesktopSchedule(
+  slots
+) {
+
+  const body = 
+    $("scheduleBody");
+
+  body.innerHTML = "";
+
+  const groupedByHour =
+    groupSlotsByHour(slots);
+
+  const sortedHours = 
+    Object.keys(groupedByHour).sort();
+
+  sortedHours.forEach((hour) => {
+
+    const timeSlots = 
+      groupedByHour[hour].sort();
+
+    timeSlots.forEach((slotKey, index) => {
+      const row = 
+        document.createElement("tr");
+
+      row.dataset.slot = slotKey;
+      const mm = slotKey.split(":")[1];
+
+      let hourCell = "";
+      if (index === 0) {
+          hourCell = `<td rowspan="${timeSlots.length}"
+          class="hour-column">${hour}</td>`;
+      }
+
+      row.innerHTML = `
+        ${hourCell}
+        <td class="minute-column">${mm}</td>
+        <td class="ME" data-slot="${slotKey}"></td>
+        <td class="EFL" data-slot="${slotKey}"></td>
+        <td class="TRP" data-slot="${slotKey}"></td>
+      `;
+
+      ["ME", "EFL", "TRP"].forEach((subject) => {
+
+        renderSubjectCell(
+          row,
+          subject,
+          slotKey,
+          slots
+        );
+
+      });
+
+      body.appendChild(row);
+    });
+  });
+}
+
+function renderMobileSchedule(slots){
+
+  const body = $("mobileSchedule");
+
+  const tabHtml =
+    MOBILE_SUBJECTS.map(subject => {
+
+      const count =
+        getSubjectStudentCount(
+          slots,
+          subject.id
+        );
+
+      const active =
+        mobileSubject === subject.id
+          ? "active"
+          : "";
+
+      return `
+        <button
+          class="mobile-tab ${active}"
+          onclick="switchMobileSubject('${subject.id}')">
+          <span>
+            ${subject.icon}
+            <b>${subject.label}</b>
+            <small>${subject.thai}</small>
+          </span>
+          <strong>${count}</strong>
+        </button>
+      `;
+
+    }).join("");
+
+  body.innerHTML = `
+    <div class="mobile-layout">
+
+      <div class="mobile-tabs">
+        ${tabHtml}
+      </div>
+
+      <div class="mobile-content"></div>
+
+    </div>
+  `;
+
+  const mobileContent =
+    body.querySelector(".mobile-content");
+
+  const fragment =
+    document.createDocumentFragment();
+
+  let renderedSlotCount = 0;
+
+  Object.keys(slots)
+    .sort()
+    .forEach(slotKey => {
+
+      const slotDiv =
+        document.createElement("div");
+
+      slotDiv.className = "mobile-slot";
+      slotDiv.dataset.slot = slotKey;
+
+      const subjectData =
+        slots[slotKey]?.subjects?.[mobileSubject] || {};
+
+      const students =
+        getStudentsFromSubject(subjectData);
+
+      sortStudents(students);
+
+      if (students.length === 0) {
+        return;
+      }
+
+      renderedSlotCount++;
+
+      const title =
+        document.createElement("div");
+
+      title.className = "mobile-slot-title";
+
+      const now =
+        formatToSlotKey(getNow());
+
+      const isCurrent =
+        slotKey === now;
+
+      if (isCurrent) {
+        slotDiv.classList.add(
+          "current-slot"
+        );
+      }
+
+      title.innerHTML = `
+        <span>
+          🕘 ${slotKey}
+          ${
+            isCurrent
+            ? `<span class="slot-now">NOW</span>`
+            : ""
+          }
+        </span>
+
+        <span>${students.length} คน</span>
+      `;
+
+      slotDiv.appendChild(title);
+
+      const groupedStudents =
+        groupStudentsByStatus(students);
+
+      MOBILE_STATUS_GROUPS.forEach(group => {
+
+        const groupStudents =
+          groupedStudents[group.key] || [];
+
+        if (!groupStudents.length) {
+          return;
+        }
+
+        const section =
+          document.createElement("section");
+
+        section.className =
+          `mobile-status-section ${group.className}`;
+
+        section.innerHTML = `
+          <div class="mobile-status-header">
+            <span>${group.label}</span>
+            <strong>${groupStudents.length}</strong>
+          </div>
+        `;
+
+        const list =
+          document.createElement("div");
+
+        list.className =
+          "mobile-student-list";
+
+        groupStudents.forEach(s => {
+
+          list.appendChild(
+            createStudentElement(
+              s,
+              mobileSubject,
+              slotKey
+            )
+          );
+
+        });
+
+        section.appendChild(
+          list
+        );
+
+        slotDiv.appendChild(
+          section
+        );
+
+      });
+
+      fragment.appendChild(slotDiv);
+
+    });
+
+    if (renderedSlotCount === 0) {
+
+      const empty =
+        document.createElement("div");
+
+      empty.className =
+        "mobile-empty-state";
+
+      empty.innerHTML = `
+        <div class="mobile-empty-icon">📭</div>
+        <div>ไม่มีรายการในวิชานี้</div>
+      `;
+
+      fragment.appendChild(empty);
+
+    }
+
+    mobileContent.appendChild(fragment);
+
+    requestAnimationFrame(()=>{
+
+      const current =
+        mobileContent.querySelector(
+          ".mobile-slot.current-slot"
+        );
+
+      if(current){
+
+        current.scrollIntoView({
+
+          block:"center"
+
+        });
+
+      }
+
+    });
+
+}
+
+function initPageUI() {
+
+  setThaiDateTitle();
+
+  startLiveClock();
+
+  highlightCurrentSlot();
+
+  setInterval(
+    highlightCurrentSlot, 
+    60000
+  );
+
+}
+
+function renderBadges(
+  student, 
+  mode = "compact"
+) {
+
+  const extras = 
+    student.extras || [];
+
+  if(!extras.length) return "";
+
+  return extras.map(extra => {
+
+    let icon = "";
+    let detail = "";
+
+    switch(extra.type){
+
+      case "WS":
+        icon = "📘";
+        detail =
+          `${extra.level} ${extra.ws}`;
+        break;
+
+      case "AT":
+        icon = "📝";
+        detail =
+          `AT ${extra.level}`;
+        break;
+
+    }
+
+    // compact mode
+    if(mode === "compact"){
+
+      return `
+        <div class="student-badge">
+          ${icon}
+
+          <div class="badge-tooltip">
+            ${detail}
+          </div>
+        </div>
+      `;
+    }
+
+    // detail mode
+    return `
+      <div class="badge-detail">
+        ${icon} ${detail}
+      </div>
+    `;
+
+  }).join("");
+
+}
+
+function setThaiDateTitle() {
+
+  const now = getNow();
+
+  if (window.innerWidth <= 768) {
+
+    const weekday = now.toLocaleDateString("th-TH", {
+      weekday: "long",
+    }).replace("วัน", "");
+
+    const day = now.getDate();
+
+    const month = now.toLocaleDateString("th-TH", {
+      month: "long",
+    });
+
+    const year = now.getFullYear() + 543;
+
+    $("pageTitle").innerText =
+      `${weekday} ${day} ${month} ${year}`;
+
+  } else {
+
+    const options = {
+      weekday: "long",
+      year: "numeric",
+      month: "long",
+      day: "numeric",
+    };
+
+    $("pageTitle").innerText =
+      now.toLocaleDateString(
+        "th-TH",
+        options
+      );
+  }
+}
+
+function startLiveClock() {
+
+  // 🔥 ฟังก์ชันอัปเดตนาฬิกาและทำให้จุด : กระพริบ
+  function updateClock() {
+
+    const now = new Date();
+
+    let hours = 
+      String(now.getHours()).padStart(2, "0");
+    let minutes = 
+      String(now.getMinutes()).padStart(2, "0");
+    let seconds = 
+      String(now.getSeconds()).padStart(2, "0");
+
+    const showColon = 
+      now.getSeconds() % 2 === 0;
+    const colonClass = 
+      showColon 
+        ? "" 
+        : "blink";
+
+    const isMobile =
+      window.innerWidth <= 768;
+
+    if(isMobile){
+
+      $("liveClock").innerHTML = `
+        ${hours}<span class="${colonClass}">:</span>${minutes}
+      `;
+
+    }else{
+
+      $("liveClock").innerHTML = `
+        ${hours}<span class="${colonClass}">:</span>${minutes}<span class="${colonClass}">:</span>${seconds}
+      `;
+
+    }
+
+  }
+
+  updateClock();
+
+  setInterval(
+    updateClock, 
+    1000
+  );
+
+}
+
+function highlightCurrentSlot() {
+
+  const now =
+    getNow();
+
+  const hour =
+    String(
+      now.getHours()
+    ).padStart(2, "0");
+
+  const minuteSlot =
+    now.getMinutes() < 30
+      ? "00"
+      : "30";
+
+  const slotKey =
+    `${hour}:${minuteSlot}`;
+
+  document
+    .querySelectorAll(
+      "tr[data-slot]"
+    )
+    .forEach((row) => {
+      row.classList.remove(
+        "current-slot"
+      );
+    });
+
+  const currentRow =
+    qs(
+      `tr[data-slot="${slotKey}"]`
+    );
+  
+  document
+    .querySelectorAll(".mobile-slot")
+    .forEach(slot=>{
+      slot.classList.remove("current-slot");
+    });
+
+  const mobileSlot =
+    qs(`.mobile-slot[data-slot="${slotKey}"]`);
+
+  if(mobileSlot){
+
+    mobileSlot.classList.add("current-slot");
+
+  }
+
+  if (currentRow) {
+    currentRow.classList.add(
+      "current-slot"
+    );
+  }
+
+}
+
+function slotToMinutes(
+  slot
+) {
+
+  const [h, m] = 
+    slot.split(":").map(Number);
+
+  return h * 60 + m;
+
+}
+
+function positionMenu(
+  menu,
+  wrapper
+){
+
+  menu.style.display =
+    "block";
+
+  const rect =
+    wrapper.getBoundingClientRect();
+
+  const menuWidth =
+    menu.offsetWidth;
+
+  const menuHeight =
+    menu.offsetHeight;
+
+  const screenWidth =
+    window.innerWidth;
+
+  const screenHeight =
+    window.innerHeight;
+
+  const spaceBelow =
+    screenHeight - rect.bottom;
+
+  const spaceAbove =
+    rect.top;
+
+  // แนวตั้ง
+  if(
+    spaceBelow < menuHeight + 10 &&
+    spaceAbove > menuHeight
+  ){
+
+    menu.style.top =
+      (rect.top - menuHeight - 8)
+      + "px";
+
+  }else{
+
+    menu.style.top =
+      (rect.bottom + 8)
+      + "px";
+
+  }
+
+  // แนวนอน
+  if(
+    rect.left + menuWidth >
+    screenWidth
+  ){
+
+    menu.style.left =
+      "auto";
+
+    menu.style.right =
+      (screenWidth - rect.right)
+      + "px";
+
+  }else{
+
+    menu.style.left =
+      rect.left + "px";
+
+    menu.style.right =
+      "auto";
+
+  }
+
+}
+
+function addMenuTitle(
+  menu,
+  student
+){
+
+  const titleBtn =
+    document.createElement(
+      "button"
+    );
+
+  titleBtn.disabled =
+    true;
+
+  titleBtn.classList.add(
+    "menu-title"
+  );
+
+  titleBtn.innerText =
+    `👤 ${
+      student.nickname || "-"
+    }`;
+
+  menu.appendChild(
+    titleBtn
+  );
+
+}
+
+function createMenuButton(
+  text,
+  onClick,
+  className = ""
+){
+
+  const btn =
+    document.createElement(
+      "button"
+    );
+
+  btn.innerText =
+    text;
+
+  btn.onclick =
+    onClick;
+
+  if(className){
+
+    btn.classList.add(
+      className
+    );
+
+  }
+
+  return btn;
+
+}
+
+// Menu สำหรับ edit ข้อมูลต่างๆ
+const menuBuilders = {
+
+  planned:
+    buildPlannedMenu,
+
+  active:
+    buildActiveMenu,
+
+  completed:
+    buildCompletedMenu,
+
+  takehome:
+    buildTakeHomeMenu,
+
+};
+
+function buildActiveMenu(
+  menu,
+  s,
+  subject,
+  slotKey
+){
+
+  menu.appendChild(
+    createMenuButton(
+      "✅ Check Out (เรียนเสร็จ)",
+      () => {
+
+        handleActionWithConfirm({
+          title:
+            "ยืนยัน Check Out",
+
+          desc:
+            `น้อง ${s.nickname}
+            \nเรียนเสร็จแล้ว ?`,
+
+          action: () =>
+            checkOut(
+              s.studentID,
+              subject,
+              slotKey
+            ),
+        });
+
+      }
+    )
+  );
+
+  menu.appendChild(
+
+    createMenuButton(
+
+      "❌ Cancel Check in (ยกเลิกเข้าเรียน)",
+
+      () => cancelCheckIn(
+        s.studentID,
+        subject,
+        slotKey
+      )
+
+    )
+
+  );
+
+}
+
+function buildCompletedMenu(
+  menu,
+  s,
+  subject,
+  slotKey
+){
+
+  menu.appendChild(
+
+    createMenuButton(
+
+      "❌ Cancel Check Out (เรียนใหม่)",
+
+      () => cancelCheckOut(
+        s.studentID,
+        subject,
+        slotKey
+      )
+
+    )
+
+  );
+
+}
+
+function buildTakeHomeMenu(
+  menu,
+  s,
+  subject,
+  slotKey
+){
+
+  menu.appendChild(
+
+    createMenuButton(
+
+      "↩️ Return to Plan",
+
+      () => returnToPlan(
+        s.studentID,
+        subject,
+        slotKey
+      )
+
+    )
+
+  );
+
+}
+
+function buildPlannedMenu(
+  menu,
+  s,
+  subject,
+  slotKey
+){
+
+  menu.appendChild(
+
+    createMenuButton(
+
+      "✅ Check in (เข้าเรียน)",
+
+      () => {
+
+        handleActionWithConfirm({
+
+          title: "ยืนยัน Check-in",
+
+          desc:
+            `${s.nickname || s.studentID}
+            \nเข้าเรียนวิชา ${subject}`,
+
+          action: () =>
+            checkIn(
+              s.studentID,
+              subject,
+              slotKey,
+              s
+            ),
+
+        });
+
+      }
+
+    )
+
+  );
+
+  menu.appendChild(
+
+    createMenuButton(
+
+      "📦 Take Home (รับการบ้าน)",
+
+      () => {
+
+        handleActionWithConfirm({
+
+          title:
+            "ยืนยัน Take Home",
+
+          desc:
+            "เด็กจะนำงานกลับไปทำที่บ้าน\n(ไม่นับว่าขาดเรียน)",
+
+          action: () =>
+            moveToTakeHome(
+              s.studentID,
+              subject,
+              slotKey
+            ),
+
+        });
+
+      }
+
+    )
+
+  );
+
+  menu.appendChild(
+
+    createMenuButton(
+
+      "📘 Add New WS (ขึ้นเรื่องใหม่)",
+
+      () => {
+
+        showAddWSModal({
+          studentID: s.studentID,
+          subject,
+          slotKey,
+          title:
+            "📘 Add New WS (ขึ้นเรื่องใหม่)",
+          desc:
+            `${s.nickname || s.studentID}`
+        });
+
+      }
+
+    )
+
+  );
+
+  menu.appendChild(
+
+    createMenuButton(
+
+      "📝 Add AT (ทดสอบจบระดับ)",
+
+      () => {
+
+        showAddWSModal({
+          studentID: s.studentID,
+          subject,
+          slotKey,
+          mode: "AT",
+          title:
+            "📝 Add AT (ทดสอบจบระดับ)",
+          desc:
+            `${s.nickname || s.studentID}`
+        });
+
+      }
+
+    )
+
+  );
+
+  menu.appendChild(
+
+    createMenuButton(
+
+      "🚫 Cancel Plan (ยกเลิกแผนการเรียน)",
+
+      () => {
+
+        handleActionWithConfirm({
+
+          title:
+            "ยกเลิกแผนการเรียน",
+
+          desc:
+            `ยืนยันการลบ ${
+              s.nickname ||
+              s.studentID
+            } ออกจากคาบเรียนนี้?`,
+
+          action: () =>
+            cancelPlan(
+              s.studentID,
+              subject,
+              slotKey
+            ),
+
+        });
+
+      },
+
+      "menu-danger"
+
+    )
+
+  );
+
+}
+
+function showMenu(
+  wrapper, 
+  s, 
+  subject, 
+  slotKey
+) {
+  
+  const menu = 
+    $("contextMenu");
+  
+  menu.innerHTML = "";
+
+  addMenuTitle(
+    menu,
+    s
+  );
+
+  const builder =
+    menuBuilders[s.status];
+
+  if(builder){
+
+    builder(
+      menu,
+      s,
+      subject,
+      slotKey
+    );
+
+  }
+
+  if(window.innerWidth <= 768){
+
+    showMobileMenu(menu);
+
+  }else{
+
+    positionMenu(menu, wrapper);
+
+  }
+
+}
+
+function showMobileMenu(menu){
+
+  menu.style.display = "none";
+
+  menu.classList.add("mobile");
+
+  $("menuOverlay").style.display = "block";
+
+  requestAnimationFrame(() => {
+
+    menu.style.display = "block";
+
+  });
+
+}
+
+function hideMenu() {
+  const menu = $("contextMenu");
+  if (menu) {
+    menu.style.display = "none";
+
+    menu.classList.remove("mobile");
+
+    $("menuOverlay").style.display = "none";
+  }
+}
+
+$("menuOverlay").addEventListener(
+    "click",
+    hideMenu
+);
+
+document.addEventListener("click", (e) => {
+  const menu = $("contextMenu");
+
+  if (
+    !menu.contains(e.target) &&
+    !e.target.closest(".student-action")
+  ) {
+
+    hideMenu();
+
+  }
+
+});
+
+async function checkIn(
+  studentID, 
+  subject, 
+  slotKey,
+  scheduleStudent
+) {
+
+  if (isProcessing) 
+    return;
+  isProcessing = true;
+
+  hideMenu();
+
+  const TAG = "CHECK_IN_SCHEDULE";
+  const today = getTodayThai();
+
+  try {
+
+    debugLog(
+      TAG, 
+      `Starting check-in for ${studentID}`, 
+      {
+        subject,
+        slotKey,
+      }
+    );
+
+    // 1. ดึงข้อมูลนักเรียน
+    const studentResult =
+      await getActiveStudent(
+        db,
+        studentID
+      );
+
+    if (studentResult.status !== "active") {
+
+      alert("❌ ไม่สามารถโหลดข้อมูลนักเรียน");
+
+      return;
+
+    }
+
+    const studentData =
+      studentResult.data;
+
+    const scheduleData = {
+      nickname:
+        scheduleStudent.nickname || "",
+      extras:
+        scheduleStudent.extras || []
+    };
+
+    const newAttendance = 
+      await createAttendance({
+        db,
+        studentId: studentID,
+        studentData,
+        today,
+      });
+
+    const { timeText, realSlot } = 
+      newAttendance;
+
+    debugLog(
+      TAG, 
+      "CREATE_ATTENDANCE_RESULT", 
+      newAttendance
+    );
+
+    await studentUpdateWeeklyPlan({
+      db,
+      studentId: studentID,
+      studentData,
+      checkInText: timeText,
+    });
+
+    debugLog(
+      TAG, 
+      "UPDATE_WEEKLY_PLAN_DONE"
+    );
+
+    await moveToCheckinSchedule({
+      db,
+      today,
+      studentId: studentID,
+      studentData,
+      scheduleData, 
+      plannedSlot: slotKey,
+      realSlot,
+      timeText,
+    });
+
+    debugLog(
+      TAG, 
+      "Check-in completed successfully"
+    );
+
+    showToast(`บันทึก ${studentData.nickname} เรียบร้อยแล้ว`);
+
+  } catch (err) {
+
+    await logError(
+      db, 
+      {
+        tag: TAG,
+        message: `Process failed for ${studentID}`,
+        error: err,
+        extra: { subject, slotKey, today },
+      }
+    );
+
+    alert("ระบบขัดข้อง: บันทึก Log เรียบร้อยแล้ว");
+
+  } finally {
+
+    isProcessing = false;
+
+  }
+
+}
+
+async function cancelPlan(
+  studentId, 
+  subject, 
+  slot
+) {
+
+  hideMenu();
+
+  const today = getTodayThai();
+
+  try {
+
+    await removePlannedStudent({
+      db,
+      date: getTodayThai(),
+      slot,
+      subject,
+      studentId
+    });
+
+    showToast("ยกเลิกแผนเรียบร้อย");
+
+  } catch (err) {
+
+    console.error(
+      "Cancel plan error",
+      err
+    );
+
+    await logError(
+      db,
+      {
+        tag: "CANCEL_PLAN",
+        message: "Failed to cancel plan",
+        error: err,
+        extra: {
+          studentId,
+          subject,
+          slot
+        }
+      }
+    );
+
+    alert("❌ ไม่สามารถยกเลิกแผนได้");
+
+  }
+
+}
+
+
+
+
+function checkOut(
+  id, 
+  subject, 
+  slot
+) {
+
+  console.log("Check out", id, subject, slot);
+  hideMenu();
+  
+}
+
+function cancelCheckIn(id, subject, slot) {
+  console.log("Cancel Check in", id, subject, slot);
+  hideMenu();
+}
+
+function cancelCheckOut(id, subject, slot) {
+  console.log("Cancel Check out", id, subject, slot);
+  hideMenu();
+}
+
+async function moveToTakeHome(studentID, subject, slotKey) {
+  if (isProcessing) 
+    return;
+
+  isProcessing = 
+    true;
+
+  hideMenu();
+
+  const TAG = 
+    "TAKE_HOME";
+  const currentDate = 
+    getTodayThai();
+  const weekday = 
+    getTodayWeekday();
+
+  const slotRef = 
+    doc(
+      db, 
+      "dailySchedule", 
+      currentDate, 
+      "slots", 
+      slotKey
+    );
+
+  const studentRef =
+    doc(
+      db,
+      "students",
+      studentID
+    );
+
+  let nicknameForToast = 
+    studentID;
+
+  try {
+
+    debugLog(
+      TAG, 
+      `Moving student to Take Home`, 
+      { studentID, subject }
+    );
+
+    await runTransaction(db, async (transaction) => {
+      const slotSnap = 
+        await transaction.get(slotRef);
+
+      if (!slotSnap.exists()) 
+        throw "Slot not found";
+
+      const data = 
+        slotSnap.data();
+
+      const studentData = 
+        data?.subjects?.[subject]?.planned?.[studentID];
+
+      if (!studentData) {
+        throw "Student not found in planned list";
+      }
+
+      nicknameForToast = 
+        studentData.nickname || studentID;
+
+      // 🔥 1. ย้ายสถานะใน schedule
+      transaction.update(slotRef, {
+        [`subjects.${subject}.planned.${studentID}`]: deleteField(),
+        [`subjects.${subject}.takeHome.${studentID}`]: {
+          ...studentData,
+        },
+      });
+
+      // 2. Update Student Behavior
+      transaction.update(studentRef, {
+        [`weeklyPlans.${weekday}.missStreak`]: 0,
+        [`weeklyPlans.${weekday}.planStrength`]: increment(1),
+      });
+    });
+
+    debugLog(
+      TAG, 
+      "Move to Take Home Success"
+    );
+
+    showToast(`📦 รับการบ้าน ${nicknameForToast} เรียบร้อยแล้ว`);
+
+  } catch (err) {
+
+    await logError(db, {
+      tag: TAG,
+      message: "Move to Take Home Failed",
+      error: err,
+      extra: { studentID, subject },
+    });
+
+    alert(`เกิดข้อผิดพลาด: ${err}`);
+
+  } finally {
+
+    isProcessing = false;
+
+  }
+
+}
+
+async function returnToPlan(studentID, subject, slotKey) {
+  if (isProcessing) 
+    return;
+
+  isProcessing = 
+    true;
+
+  const TAG = 
+    "RETURN_TO_PLAN";
+  const currentDate = 
+    getTodayThai();
+  const weekday = 
+    getTodayWeekday();
+
+  const slotRef = 
+    doc(
+      db, 
+      "dailySchedule", 
+      currentDate, 
+      "slots", 
+      slotKey
+    );
+
+  const studentRef =
+    doc(
+      db,
+      "students",
+      studentID
+    );
+
+  let nicknameForToast = studentID;
+
+  try {
+
+    debugLog(
+      TAG, 
+      `Returning student to Planned`, 
+      { studentID, subject }
+    );
+
+    await runTransaction(db, async (transaction) => {
+      const slotSnap = 
+        await transaction.get(slotRef);
+
+      if (!slotSnap.exists()) 
+        throw "ไม่พบข้อมูล Slot";
+
+      const data = 
+        slotSnap.data();
+
+      const studentData =
+        data?.subjects?.[subject]?.takeHome?.[studentID];
+
+      if (!studentData) {
+        throw "ไม่พบข้อมูลในช่อง Take Home (อาจถูกย้อนกลับไปแล้ว)";
+      }
+
+      // 1. ย้ายกลับจาก takeHome -> planned
+      transaction.update(slotRef, {
+        [`subjects.${subject}.takeHome.${studentID}`]: deleteField(),
+        [`subjects.${subject}.planned.${studentID}`]: {
+          nickname: studentData.nickname,
+        },
+      });
+
+      // 2. หักแต้มคืน (-1) เพราะเป็นการกดย้อนกลับจากความผิดพลาด
+      transaction.update(studentRef, {
+        [`weeklyPlans.${weekday}.missStreak`]: 1,
+        [`weeklyPlans.${weekday}.planStrength`]: increment(-1),
+      });
+    });
+
+    debugLog(
+      TAG, 
+      "🔄 Return to Plan success"
+    );
+
+    showToast(`ย้อน ${nicknameForToast} กลับแผนการเรียนเรียบร้อยแล้ว`,);
+
+  } catch (err) {
+
+    await logError(db, {
+      tag: TAG,
+      message: "Return to Plan Failed",
+      error: err,
+      extra: { studentID, subject },
+    });
+
+    alert("ย้อนกลับไม่สำเร็จ: " + err);
+
+  } finally {
+
+    isProcessing = false;
+
+  }
+}
+
+const WS_LEVELS = {
+
+  ME:[
+    "6A","5A","4A","3A","2A","A","B","C","D","E","F",
+    "G","H","I","J","K","L","M","N","O"
+  ],
+
+  EFL:[
+    "7A","6A","5A","4A","3A","2A","A","B","C","D","E",
+    "F","G","H","I","J","K","L","M","N","O"
+  ],
+
+  TRP:[
+    "7A","6A","5A","4A","3A","2A","AI","AII","BI","BII","CI","CII",
+    "DI","DII","EI","EII","FI","FII","GI","GII","HI","HII","II","III"
+  ]
+};
+
+const AT_LEVELS = {
+
+  ME:[
+    "4A","3A","2A","A","B","C","D","E",
+    "F","G","H","I","J","K","L","M","N","O"
+  ],
+
+  EFL:[
+    "7A","6A","5A","4A","3A","2A","A","B","C","D",
+    "E","F","G","H","I","J","K","L","M","N","O"
+  ],
+
+  TRP:[
+    "5A","4A","3A","2A","AI","AII","BI","BII",
+    "CI","CII","DI","DII","EI","EII","FI","FII"
+  ]
+};
+
+const WS_START = {
+    "1":1,"11":11,"21":21,"31":31,"41":41,"51":51,"61":61,"71":71,
+    "81":81,"91":91,"101":101,"111":111,"121":121,"131":131,
+    "141":141,"151":151,"161":161,"171":171,"181":181,"191":191
+  };
+
+function findStudentSection(subjectData, studentID){
+
+  const sections = 
+    ["planned","checkedIn","completed","takeHome"];
+
+  for(const section of sections){
+
+    if(subjectData?.[section]?.[studentID]){
+      return section;
+    }
+
+  }
+
+  return null;
+
+}
+
+async function addExtraWS({studentID,subject,slotKey,level,ws}){
+  const today = 
+    getTodayThai();
+
+  const slotRef = 
+    doc(
+      db,
+      "dailySchedule",
+      today,
+      "slots",
+      slotKey
+    );
+
+  const snap = 
+    await getDoc(slotRef);
+
+  if(!snap.exists()) 
+    return;
+
+  const data = 
+    snap.data();
+  const subjectData = 
+    data?.subjects?.[subject];
+
+  const section = 
+    findStudentSection(
+      subjectData,
+      studentID
+    );
+
+  if(!section) 
+    return;
+
+  const student = 
+    subjectData?.[section]?.[studentID];
+
+  const extras = 
+    student.extras || [];
+
+  extras.push({
+    type:"WS",
+    level,
+    ws
+  });
+
+  await updateDoc(slotRef,{
+    [`subjects.${subject}.${section}.${studentID}.extras`]:
+      extras
+  });
+
+  showToast(`📘 เพิ่ม ${level} ${ws}`);
+
+}
+
+async function addExtraAT({studentID,subject,slotKey,level}){
+
+  const today = 
+    getTodayThai();
+  const slotRef = 
+    doc(
+      db,
+      "dailySchedule",
+      today,
+      "slots",
+      slotKey
+    );
+
+  const snap = 
+    await getDoc(slotRef);
+
+  if(!snap.exists()) 
+    return;
+
+  const data = 
+    snap.data();
+
+  const subjectData = 
+    data?.subjects?.[subject];
+
+  const section = 
+    findStudentSection(
+      subjectData,
+      studentID
+    );
+
+  if(!section) 
+    return;
+
+  const student = 
+    subjectData?.[section]?.[studentID];
+
+  const extras = 
+    student.extras || [];
+
+  extras.push({
+    type:"AT",
+    level
+  });
+
+  await updateDoc(slotRef,{
+    [`subjects.${subject}.${section}.${studentID}.extras`]:
+      extras
+  });
+
+  showToast(`📝 เพิ่ม AT ${level}`);
+
+}
+
+async function removeLastWS({studentID,subject,slotKey}){
+
+  const today = 
+    getTodayThai();
+  const slotRef = 
+    doc(
+      db,
+      "dailySchedule",
+      today, 
+      "slots",
+      slotKey
+    );
+
+  const snap = 
+    await getDoc(slotRef);
+  if(!snap.exists()) 
+    return;
+
+  const data = 
+    snap.data();
+  const subjectData = 
+    data?.subjects?.[subject];
+
+  const section = 
+    findStudentSection(
+      subjectData,
+      studentID
+    );
+
+  if(!section) 
+    return;
+
+  const student = 
+    subjectData?.[section]?.[studentID];
+
+  let extras = 
+    student.extras || [];
+
+  for(let i=extras.length-1; i>=0; i--){
+
+    if(extras[i].type === "WS"){
+      extras.splice(i,1);
+      break;
+    }
+
+  }
+
+  await updateDoc(slotRef,{
+    [`subjects.${subject}.${section}.${studentID}.extras`]:
+      extras
+  });
+
+  showToast("↩️ ลบ WS ล่าสุด");
+
+}
+
+async function removeLastAT({studentID, subject,slotKey}){
+
+  const today = 
+    getTodayThai();
+  const slotRef = 
+    doc(
+      db,
+      "dailySchedule",
+      today,
+      "slots", 
+      slotKey
+    );
+
+  const snap = 
+    await getDoc(slotRef);
+  if(!snap.exists()) 
+    return;
+
+  const data = 
+    snap.data();
+  const subjectData = 
+    data?.subjects?.[subject];
+
+  const section = 
+    findStudentSection(
+      subjectData,
+      studentID
+    );
+
+  if(!section) 
+    return;
+
+  const student =
+    subjectData?.[section]?.[studentID];
+  let extras =
+    student.extras || [];
+
+  for(let i=extras.length-1; i>=0; i--){
+    if(extras[i].type === "AT"){
+      extras.splice(i,1);
+      break;
+    }
+  }
+
+  await updateDoc(slotRef,{
+    [`subjects.${subject}.${section}.${studentID}.extras`]:
+      extras
+  });
+
+  showToast("↩️ ลบ AT ล่าสุด");
+
+}
+
+function showConfirm({
+  title,
+  desc,
+  onConfirm
+}) {
+
+  const modal =
+    $("confirmModal");
+
+  $("confirmTitle").innerText = title;
+  $("confirmDesc").innerText = desc;
+
+  modal.style.display = "flex";
+
+  $("cancelBtn").onclick = ()=> {
+
+    modal.style.display = "none";
+
+  };
+
+  $("confirmBtn").onclick = ()=> {
+
+    modal.style.display = "none";
+
+    if(typeof onConfirm === "function"){
+      onConfirm();
+    }
+
+  };
+
+}
+
+function showAddWSModal({
+  studentID,
+  subject,
+  slotKey,
+  title,
+  desc,
+  mode = "WS"
+}) {
+
+  hideMenu();
+
+  const modal =
+    $("addWSModal");
+
+  $("addWSTitle").innerText = title;
+  $("addWSDesc").innerText = desc;
+
+  const levelPickerEl = 
+    $("levelPicker");
+  const wsPickerEl = 
+    $("wsPicker");
+
+  const wsWrap =
+    $("addWSSelectWrap");
+
+  const levels =
+    mode === "AT"
+      ? (AT_LEVELS[subject] || [])
+      : (WS_LEVELS[subject] || []);
+
+  if(mode === "AT"){
+
+    wsWrap.style.display = "none";
+
+  }else{
+
+    wsWrap.style.display = "flex";
+
+  }
+
+  const levelPicker = new WheelPicker({
+    element: levelPickerEl,
+    items: levels,
+    value: levels[0]
+  });
+
+  const wsPicker = new WheelPicker({
+    element: wsPickerEl,
+    items: Object.keys(WS_START),
+    value: "1"
+  });
+
+  modal.style.display = "flex";
+
+  $("addWSConfirmBtn").onclick = async ()=> {
+
+    const level =
+      levelPicker.getValue();
+
+    const ws =
+      wsPicker.getValue();
+
+    try{
+
+      if(mode === "AT"){
+
+        await addExtraAT({
+          studentID,
+          subject,
+          slotKey,
+          level
+        });
+
+      }else{
+
+        await addExtraWS({
+          studentID,
+          subject,
+          slotKey,
+          level,
+          ws
+        });
+
+      }
+
+      modal.style.display = "none";
+
+    }catch(err){
+
+      console.error(err);
+
+      showToast(
+        "เพิ่มงานไม่สำเร็จ",
+        "error"
+      );
+    }
+
+  };
+
+  $("addWSCancelLastBtn").onclick = async ()=> {
+
+    try{
+
+      if(mode === "AT"){
+
+        await removeLastAT({
+          studentID,
+          subject,
+          slotKey
+        });
+
+      }else{
+
+        await removeLastWS({
+          studentID,
+          subject,
+          slotKey
+        });
+
+      }
+
+      modal.style.display = "none";
+
+    }catch(err){
+
+      console.error(err);
+
+      showToast(
+        "ลบงานไม่สำเร็จ",
+        "error"
+      );
+    }
+
+  };
+
+  $("addWSCloseBtn").onclick = ()=> {
+
+    modal.style.display = "none";
+
+  };
+  
+}
+
+// ฟังก์ชันกลางตัวเดียวที่ใช้ได้กับทุก Action
+function handleActionWithConfirm(config) {
+
+  const { title, desc, action } = 
+    config;
+
+  showConfirm({
+    title: title,
+    desc: desc,
+    onConfirm: () => {
+      if (typeof action === "function") {
+        action();
+      }
+      hideMenu(); // ปิดเมนูหลังจากกดตกลง
+    },
+
+  });
+
+}
+
+function updateTotalCounts(slots) {
+  try {
+    let active = 0,
+      completed = 0,
+      takehome = 0,
+      planned = 0;
+
+    Object.values(slots).forEach((slot) => {
+      if (!slot.subjects) 
+        return;
+      
+      ["ME", "EFL", "TRP"]
+        .forEach((subject) => {
+          const sub = 
+            slot.subjects[subject] || {};
+          active += 
+            Object.keys(sub.checkedIn || {}).length;
+          completed += 
+            Object.keys(sub.completed || {}).length;
+          takehome += 
+            Object.keys(sub.takeHome || {}).length;
+          planned += 
+            Object.keys(sub.planned || {}).length;
+        });
+    });
+
+    const updateElem = 
+      (id, val) => {
+        const el = 
+          $(id);
+        if (el) 
+          el.innerText = val;
+      };
+
+    updateElem("count-active", active);
+    updateElem("count-completed", completed);
+    updateElem("count-takehome", takehome);
+    updateElem("count-planned", planned);
+
+  } catch (e) {
+
+    console.error("Error updating counts:", e);
+
+  }
+
+}
+
+function showToast(message, type = "success") {
+  const toast = 
+    $("toast");
+  toast.innerText = 
+    message;
+
+  toast.classList.remove(
+    "toast-success",
+    "toast-error"
+  );
+
+  toast.classList.add(
+    type === "success"
+      ? "toast-success"
+      : "toast-error"
+  );  
+
+  toast.classList.add("show");
+
+  setTimeout(() => toast.classList.remove("show"), 3000);
+
+}
+
+function renderSkeleton() {
+  const body = 
+    $("scheduleBody");
+  body.innerHTML = "";
+  for (let i = 0; i < 5; i++) {
+    const row = 
+      document.createElement("tr");
+    row.innerHTML = `
+      <td><div class="skeleton skeleton-sm"></div></td>
+      <td><div class="skeleton"></div></td>
+      <td><div class="skeleton"></div></td>
+      <td><div class="skeleton"></div></td>
+  `;
+    body.appendChild(row);
+  }
+}
+
+
+searchInput.addEventListener(
+  "input", () => {
+
+    clearTimeout(searchTimer);
+
+    searchTimer = setTimeout(() => {
+
+      runStudentSearch(searchInput.value);
+
+    },120);
+
+  }
+
+);
+
+searchInput.addEventListener(
+  "keydown",
+  (e)=>{
+
+    if(e.key === "Enter"){
+
+      e.preventDefault();
+
+      nextSearch();
+
+    }
+
+  }
+);
+
+$("searchNext").onclick = nextSearch;
+$("searchPrev").onclick = prevSearch;
+$("searchClear").onclick = clearSearch;
+
+function normalizeText(text){
+
+  return String(text || "")
+    .toLowerCase()
+    .trim()
+    .replace(/\s+/g,"");
+
+}
+
+function focusSearchResult(){
+
+  if(searchResults.length === 0){
+
+    searchCount.innerText = "0 / 0";
+    return;
+
+  }
+
+  // ลบตัวเลือกเดิม
+  searchResults.forEach(el=>{
+    el.classList.remove("search-current");
+  });
+
+  const current =
+    searchResults[currentSearchIndex];
+
+  if(!current)
+    return;
+
+  current.classList.add("search-current");
+
+  searchCount.innerText =
+    `${currentSearchIndex + 1} / ${searchResults.length}`;
+
+  current.scrollIntoView({
+
+    behavior:"smooth",
+
+    block:"center",
+
+    inline:"center"
+
+  });
+
+}
+
+function nextSearch(){
+
+  if(searchResults.length === 0)
+    return;
+
+  currentSearchIndex++;
+
+  if(currentSearchIndex >= searchResults.length){
+
+    currentSearchIndex = 0;
+
+  }
+
+  focusSearchResult();
+
+}
+
+function prevSearch(){
+
+  if(searchResults.length === 0)
+    return;
+
+  currentSearchIndex--;
+
+  if(currentSearchIndex < 0){
+
+    currentSearchIndex =
+      searchResults.length - 1;
+
+  }
+
+  focusSearchResult();
+
+}
+
+function clearSearch(){
+
+  searchInput.value = "";
+
+  runStudentSearch("");
+
+  searchInput.focus();
+
+}
+
+function runStudentSearch(keyword){
+
+  const allStudents =
+    document.querySelectorAll(
+      ".student-wrapper"
+    );
+
+  const cleanKeyword =
+    normalizeText(keyword);
+
+  searchResults = [];
+  currentSearchIndex = -1;
+  let hitCount = 0;
+
+  // reset ก่อน
+  allStudents.forEach(el => {
+
+    el.classList.remove(
+      "search-hit",
+      "search-dim",
+      "search-current"
+    );
+
+  });
+
+  if(!cleanKeyword){
+
+    searchCount.innerText =
+      "0 / 0";
+
+    document
+      .querySelectorAll(".mobile-slot")
+      .forEach(slot=>{
+          slot.style.display = "";
+      });
+
+    return;
+  }
+
+  allStudents.forEach(el => {
+
+    const name =
+      normalizeText(
+        el.innerText
+      );
+
+    const tooltip =
+      normalizeText(
+        el.querySelector(".tooltip-id")?.innerText
+      );
+
+    const matched =
+      name.includes(cleanKeyword) ||
+      tooltip.includes(cleanKeyword);
+
+    if(matched){
+
+      hitCount++;
+
+      el.classList.add("search-hit");
+
+      searchResults.push(el);
+
+    }else{
+
+      el.classList.add("search-dim");
+
+    }
+
+  });
+
+  document.querySelectorAll(".mobile-slot")
+    .forEach(slot => {
+
+        const visible =
+            slot.querySelector(".search-hit");
+
+        slot.style.display =
+            visible ? "" : "none";
+
+    });
+
+  if(searchResults.length){
+
+    currentSearchIndex = 0;
+
+    focusSearchResult();
+
+  }else{
+
+    searchCount.innerText = "0 / 0";
+
+  }
+
+}
+
+window.switchMobileSubject = switchMobileSubject;
+
+</script>
+</body>
+</html>

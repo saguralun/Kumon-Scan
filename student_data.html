@@ -1,0 +1,1400 @@
+<!doctype html>
+<html lang="th">
+<head>
+<meta charset="UTF-8" />
+<meta
+	name="viewport"
+	content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no"
+/>
+<title>จัดการข้อมูลนักเรียน</title>
+<link
+	href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css"
+	rel="stylesheet"
+/>
+<link
+	rel="stylesheet"
+	href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css"
+/>
+<script src="https://cdn.jsdelivr.net/npm/papaparse@5.4.1/papaparse.min.js"></script>
+
+<link rel="stylesheet" href="./studentData/css/studentData.css">
+
+</head>
+<body>
+
+	<div class="container search-container">
+	<h3 class="mb-4 text-center text-primary fw-bold">
+		ระบบจัดการข้อมูลนักเรียน
+	</h3>
+
+	<div class="accordion mb-3" id="importAccordion">
+		<div class="accordion-item shadow-sm">
+			<h2 class="accordion-header">
+				<button
+					class="accordion-button collapsed bg-light fw-bold"
+					type="button"
+					data-bs-toggle="collapse"
+					data-bs-target="#collapseImport"
+				>
+					📤 นำเข้าข้อมูลนักเรียน (Import Student.csv)
+				</button>
+			</h2>
+			<div
+				id="collapseImport"
+				class="accordion-collapse collapse"
+				data-bs-parent="#importAccordion"
+			>
+				<div class="accordion-body">
+					<div class="row g-2">
+					<div class="col-7">
+						<input
+							id="fileInput"
+							type="file"
+							class="form-control"
+							title="เลือกไฟล์ CSV สำหรับนำเข้าข้อมูลนักเรียน"
+						/>
+					</div>
+					<div class="col-5">
+						<button id="previewBtn" class="btn btn-info w-100">
+							ดูตัวอย่าง
+						</button>
+					</div>
+					</div>
+
+					<div class="mt-3 progress-container" id="progressContainer">
+						<div class="progress progress-import">
+							<div
+								id="progressBar"
+								class="progress-bar progress-bar-striped progress-bar-animated bg-success"
+							>
+								0%
+							</div>
+						</div>
+
+						<small
+							id="progressText"
+							class="text-muted d-block mt-1 text-center font-monospace"
+							>0 / 0 (0%)
+						</small>
+					</div>
+
+					<div class="text-center mt-3">
+						<button
+							id="importBtn"
+							class="btn btn-success px-5 import-btn"
+							onclick="handleImport()"
+						>
+							2. ยืนยันการนำเข้าข้อมูลทั้งหมด
+						</button>
+					</div>
+				</div>
+			</div>
+		</div>
+	</div>
+
+	<div class="card shadow-sm border-0">
+    <div class="card-body p-2">
+			<div class="search-input-wrapper">
+				<input
+					id="searchInput"
+					class="form-control form-control-sm search-input"
+					placeholder="🔍 ค้นหาด้วย รหัส ชื่อ หรือชื่อเล่น"
+				/>
+			</div>
+    </div>
+	</div>
+
+	<div class="student-card">
+		<div id="resultSummary" class="text-center text-muted small mb-2"></div>
+
+		<div id="resultBody" class="student-list"></div>
+
+		<div id="emptyState"
+				class="text-center text-muted py-3 hidden">
+				กรุณาพิมพ์เพื่อค้นหาข้อมูล หรือเลือกไฟล์เพื่อ Preview
+		</div>
+	</div>
+</div>
+
+<div class="modal fade" id="statusModal" tabindex="-1" aria-hidden="true">
+	<div class="modal-dialog modal-dialog-centered">
+		<div class="modal-content">
+			<div class="modal-header">
+				<h5 class="modal-title fw-bold">ยืนยันการทำรายการ</h5>
+				<button
+					type="button"
+					class="btn-close"
+					data-bs-dismiss="modal"
+					aria-label="Close"
+				></button>
+			</div>
+			<div class="modal-body text-center fs-5">
+				<div class="p-3 mb-3 bg-light rounded border">
+					<div class="small text-muted">นักเรียนที่จะจัดการ:</div>
+					<div id="targetStudentInfo" class="fw-bold fs-5 text-dark"></div>
+				</div>
+
+				<div class="fs-6">
+					คุณต้องการจะ
+					<span id="statusActionText" class="fw-bold"></span> ใช่หรือไม่?
+				</div>
+			</div>
+
+			<div class="modal-footer justify-content-center">
+				<button
+					type="button"
+					class="btn btn-secondary px-4"
+					data-bs-dismiss="modal"
+				>
+					ยกเลิก
+				</button>
+				<button
+					type="button"
+					id="confirmStatusBtn"
+					class="btn btn-primary px-4"
+				>
+					ยืนยัน
+				</button>
+			</div>
+		</div>
+	</div>
+</div>
+
+<div
+    class="toast-container position-fixed bottom-0 start-50 translate-middle-x p-3"
+>
+	<div
+		id="liveToast"
+		class="toast align-items-center text-white bg-success border-0"
+		role="alert"
+		aria-live="assertive"
+		aria-atomic="true"
+	>
+	<div class="d-flex">
+		<div class="toast-body">
+		✅ <span id="toastMessage">บันทึกข้อมูลสำเร็จ</span>
+		</div>
+		<button
+			type="button"
+			class="btn-close btn-close-white me-2 m-auto"
+			data-bs-dismiss="toast"
+			aria-label="Close"
+		></button>
+	</div>
+	</div>
+</div>
+
+<button id="scrollTopBtn" class="scroll-top-btn">
+	⬆
+</button>
+
+<div class="app-version-tag">
+	v<span id="displayVersion"></span>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+
+<script type="module">
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
+import {
+	getFirestore,
+	collection,
+	query,
+	limit,
+	getDocs,
+	doc,
+	updateDoc,
+	orderBy,
+	startAt,
+	endAt,
+	serverTimestamp,
+	startAfter,
+	documentId,
+	getCountFromServer,
+	writeBatch,
+	getDoc,
+} from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
+
+// --- 2. Shared Utilities ---
+import {
+	APP_VERSION,
+	checkVersionAndReload,
+	searchStudents,
+	renderStudentCard,
+	buildSearchTokens,
+	excelDateToJSDate,
+	logError,
+	debugLog,
+} from "./shared/index.js";
+
+import { $, qs } from "./checkin/ui/dom.js";
+
+const firebaseConfig = {
+	apiKey: "AIzaSyBfJ9F94tdUw6sIY8ffUPV0AKxXWzZig8s",
+	authDomain: "scan-qrcode-kumon.firebaseapp.com",
+	projectId: "scan-qrcode-kumon",
+};
+
+const app = initializeApp(firebaseConfig);
+const db = getFirestore(app);
+const scrollBtn = $("scrollTopBtn");
+const DEV_MODE =
+location.hostname === "localhost" ||
+location.hostname === "127.0.0.1" ||
+location.hostname.startsWith("192.168");
+const mockStudents = [
+	{
+		id: "65001",
+		firstName: "สมชาย",
+		lastName: "ใจดี",
+		nickname: "ชาย",
+		subject: "ME",
+		active: true,
+		phone: "081-234-5678",
+		gender: "male",
+		birthDate: "2012-05-10",
+	},
+	{
+		id: "65002",
+		firstName: "สมหญิง",
+		lastName: "ใจดี",
+		nickname: "หญิง",
+		subject: "EFL",
+		active: false,
+		phone: "089-555-1234",
+		gender: "female",
+		birthDate: "2013-11-22",
+	},
+	{
+		id: "65003",
+		firstName: "กิตติ",
+		lastName: "วัฒนะ",
+		nickname: "ติ",
+		subject: "ME",
+		active: true,
+		phone: "082-111-9999",
+		gender: "male",
+		birthDate: "2011-01-05",
+	},
+];
+const state = 
+	{
+		currentPage: 1,
+		lastVisible: null,
+		total: 0,
+		loading: false,
+	};
+const requiredHeaders = [
+		"ID",
+		"ชื่อจริง",
+		"นามสกุล",
+		"ชื่อเล่น",
+		"Subject",
+		"Status",
+		"Phone",
+		"Gender",
+		"BirthDate",
+	];
+
+const pageSize = 10;
+let pendingStatusChange = { id: null, status: null };
+let snapshots = [];
+let tempCsvData = [];
+let el = {};
+
+const normalize = {
+	text: (v) => (v || "").toString().trim(),
+
+	gender: (g) => {
+		const val = (g || "").toString().trim().toLowerCase();
+
+		if (val === "ชาย" || val === "male") 
+			return "male";
+		if (val === "หญิง" || val === "female") 
+			return "female";
+
+		return "";
+	},
+
+	date: (d) => {
+		if (!d) return "";
+
+		let val = d.toString().trim();
+
+		// 1. Excel number
+		if (!isNaN(val)) {
+			return excelDateToJSDate(Number(val));
+		}
+
+		// 2. รูปแบบ dd/mm/yyyy หรือ dd-mm-yyyy
+		const match = val.match(/(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})/);
+		
+		if (match) {
+			let day = match[1];
+			let month = match[2];
+			let year = parseInt(match[3]);
+
+			// 🔥 แปลง พ.ศ. → ค.ศ.
+			if (year > 2500) {
+					year -= 543;
+			}
+
+			return `${year}-${month.padStart(2, "0")}-${day.padStart(2, "0")}`;
+		}
+
+		// 3. yyyy-mm-dd (ปล่อยผ่าน)
+		return val;
+	},
+};
+
+window.addEventListener("load", async () => {
+	el = {
+		body: $("resultBody"),
+		summary: $("resultSummary"),
+		empty: $("emptyState"),
+		input: $("searchInput"),
+	};
+
+	$("displayVersion").innerText = 
+		APP_VERSION;
+
+	// ===== Import CSV =====
+	$("previewBtn").disabled = 
+		true;
+
+	$("fileInput").addEventListener(
+		"change", () => {
+			$("previewBtn").disabled = false;
+		}
+	);
+
+	$("previewBtn").addEventListener(
+		"click", 
+		previewCSV
+	);
+
+	// ===== Version Check =====
+	const config = 
+		await checkVersionAndReload(
+			db
+		);
+
+	if (!config.ok) 
+		return;
+
+	// 🔥 DEV MODE AUTO SEARCH
+	if (DEV_MODE) {
+
+		$("searchInput").value = "";
+
+		renderMockData();
+
+	}
+
+	let searchTimer;
+
+	el.input.addEventListener(
+		"input", () => {
+			clearTimeout(searchTimer);
+
+			searchTimer = 
+				setTimeout(() => {
+					searchStudent(false);
+				}, 1000);
+		}
+	);
+
+});
+
+window.searchStudent = async (isNextPage = false) => {
+
+	const searchText =
+		el.input?.value?.trim() || "";
+	const searchType = 
+		detectSearchType(searchText);
+
+	// 1. จัดการ UI ก่อนโหลดข้อมูล
+	if (!isNextPage) {
+		state.lastVisible = 
+			null;
+		state.currentPage = 
+			1;
+		state.hasMore = 
+			true;
+	} else {
+		state.currentPage++;
+	}
+
+	el.empty.classList.add("hidden");
+
+	if (!searchText) {
+    stopSearch();
+		return;
+	}
+
+	if (searchType === "id" && searchText.length < 2) {
+    stopSearch();
+		return;
+	}
+
+	if (state.loading) 
+		return;
+
+	state.loading = 
+		true;
+
+	debugLog(
+		"SEARCH", 
+		`Searching ${searchType} for: ${searchText}`
+	);
+
+	// ล้างข้อมูลเก่าทิ้งทันที และแสดง Loading
+	if (!isNextPage) {
+		setLoading(state.currentPage);
+	}
+	try {
+		const querySnapshot = 
+			await searchStudents(
+				db,
+				searchText,
+				searchType,
+				{
+					pageSize,
+					lastVisible: state.lastVisible,
+				},
+			);
+
+		const currentBatchSize =
+			querySnapshot.docs.length;
+
+		debugLog(
+			"SEARCH", 
+			"Query Success", 
+			{
+				count: querySnapshot.docs.length,
+			}
+		);
+
+		// 2. ตรวจสอบข้อมูล
+		if (querySnapshot.empty) {
+			el.body.innerHTML = 
+				"";
+			el.summary.innerText = 
+				"";
+			showEmptyState("ไม่พบข้อมูล");
+
+			return;
+		}
+
+		// ล้าง Loading ออกเพื่อเตรียมใส่ข้อมูลใหม่
+		if (!isNextPage) {
+			resultBody.innerHTML = 
+				"";
+		}
+
+		// Render รายชื่อนักเรียน (10 รายการ)
+		renderList(
+			querySnapshot.docs, 
+			isNextPage
+		);
+
+		renderSummary(
+			el.body.querySelectorAll(
+				".student-card-item"
+			).length
+		);
+
+		el.empty.style.display = 
+			"none";
+
+		// เก็บตำแหน่งสุดท้ายเพื่อใช้เรียกหน้าถัดไป
+		state.lastVisible = 
+			querySnapshot.docs[querySnapshot.docs.length - 1];
+
+		if (currentBatchSize < pageSize) {
+			state.hasMore = 
+				false; 
+		}
+
+		// เลื่อนหน้าจอขึ้นไปที่จุดเริ่มต้นของตาราง เพื่อความสะดวกของผู้ใช้
+		if (!isNextPage) {
+			window.scrollTo({
+				top: qs(".student-card").offsetTop,
+				behavior: "smooth",
+			});
+		}
+	} catch (error) {
+			// ⭐ ใช้ logError เพื่อบันทึกลง Firestore อัตโนมัติ
+			await logError(db, {
+			tag: "STUDENT_SEARCH",
+			message: "ค้นหาข้อมูลนักเรียนล้มเหลว",
+			error: error,
+			extra: { searchType, searchText, isNextPage },
+			});
+			showToast("การค้นหาขัดข้อง: " + error.message, "danger");
+	} finally {
+			state.loading = false;
+	}
+
+};
+
+// --- ส่วน Preview ---
+window.previewCSV = async () => {
+
+	const file =
+		$("fileInput").files[0];
+
+	if (!file) {
+
+		showToast(
+			"กรุณาเลือกไฟล์ก่อนครับ"
+		);
+
+		return;
+
+	}
+
+	Papa.parse(file, {
+
+		header: true,
+		skipEmptyLines: true,
+
+		complete: async ({
+			data,
+			meta
+		}) => {
+
+			if (
+				!validateCsvHeaders(
+					meta.fields
+				)
+			) {
+
+				showInvalidHeader();
+				return;
+
+			}
+
+			tempCsvData =
+				data;
+
+			showPreviewLoading();
+
+			snapshots =
+				await loadStudentSnapshots(
+					data
+				);
+
+			renderPreview(
+				data,
+				snapshots
+			);
+
+		}
+
+	});
+
+};
+
+// --- ส่วนการบันทึก (Import) ---
+window.handleImport = async () => {
+	if (!tempCsvData.length) 
+		return;
+	const confirmBtn = 
+		$("importBtn");
+	const progressContainer = 
+		$("progressContainer");
+	const progressBar = 
+		$("progressBar");
+	const progressText = 
+		$("progressText");
+	confirmBtn.disabled = 
+		true;
+
+	confirmBtn.classList.add("btn-secondary");
+	confirmBtn.innerText = "⏳ กำลังนำเข้าข้อมูล...";
+	progressContainer.classList.add("is-visible");
+
+	try {
+		debugLog(
+			"IMPORT", 
+			"Starting Import process", 
+			{
+				total: tempCsvData.length,
+			}
+		);
+
+		let processed = 0;
+		let updatedCount = 0;
+		let skippedCount = 0;
+		const total = 
+			tempCsvData.length;
+		const BATCH_SIZE = 
+			400;
+
+		for (let i = 0; i < total; i += BATCH_SIZE) {
+			const batch = 
+				writeBatch(db);
+			const chunk = 
+				tempCsvData.slice(i, i + BATCH_SIZE);
+
+
+			chunk.forEach((row, index) => {
+
+				processed++;
+
+				const studentId = 
+					row["ID"]?.trim();
+				if (!studentId) 
+					return;
+					
+				const data =
+					buildImportData(row);
+
+				const oldSnap = 
+					snapshots[i + index];
+
+				const changes =
+					oldSnap?.exists()
+						? getChanges(
+								oldSnap.data(),
+								data
+							)
+						: [{}];
+
+				const isChanged =
+					changes.length > 0;
+
+				if (isChanged) {
+					batch.set(
+						doc(db, 
+							"students", 
+							studentId
+						),
+						{
+							...data,
+							updatedAt:
+								serverTimestamp()
+						},
+						{ 
+							merge: true 
+						},
+					);
+					updatedCount++;
+				} else {
+					skippedCount++;
+				}
+
+			});
+
+			await batch.commit();
+			console.log(`✅ Batch ${i / BATCH_SIZE + 1} สำเร็จ`);
+
+			// อัปเดต Progress Bar
+			const percent = 
+				Math.floor((processed / total) * 100);
+			progressBar.style.width = 
+				percent + "%";
+			progressBar.innerText = 
+				percent + "%";
+			progressText.innerText = `
+				ประมวลผล ${processed}/${total} (บันทึกใหม่/แก้ไข: ${updatedCount}, ข้าม: ${skippedCount})
+			`;
+		}
+
+		debugLog(
+			"IMPORT", 
+			"Batch Commit Success"
+		);
+		
+		showToast(`✅ นำเข้าสำเร็จ! บันทึก/แก้ไข: ${updatedCount} รายการ`);
+		
+		// 🔥 เปลี่ยนปุ่มให้กลายเป็นปุ่ม reload
+		confirmBtn.disabled = false;
+		confirmBtn.innerText = `🔄 โหลดข้อมูลใหม่ (${updatedCount})`;
+		confirmBtn.classList.remove("btn-secondary");
+		confirmBtn.classList.remove("btn-success");
+		confirmBtn.classList.add("btn-primary");
+		
+		// เปลี่ยนพฤติกรรมปุ่ม
+		confirmBtn.onclick = () => {
+			confirmBtn.disabled = true;
+			location.reload();
+		};
+
+	} catch (error) {
+
+		await logError(db, {
+			tag: "STUDENT_IMPORT",
+			message: "การ Import CSV ล้มเหลว",
+			error: error,
+			extra: { dataSize: tempCsvData.length },
+		});
+
+		showToast(
+			"เกิดข้อผิดพลาดในการบันทึกข้อมูล: " + error.message,
+			"danger",
+		);
+
+		confirmBtn.classList.remove("btn-secondary");
+		confirmBtn.classList.add("btn-danger");
+		confirmBtn.innerText = "❌ ลองใหม่อีกครั้ง";
+		confirmBtn.onclick = handleImport;
+		confirmBtn.disabled = false;
+
+	}
+
+};
+
+// --- ส่วนการเลื่อนขึ้น - ลง (scroll) ---
+window.addEventListener(
+	"scroll",
+	handleScroll
+);
+
+scrollBtn.addEventListener("click", () => {
+
+	window.scrollTo({
+		
+		top: 0,
+		behavior: "smooth",
+
+	});
+
+});
+
+// --- [ฟังก์ชันจัดการ Pop-up เปลี่ยนสถานะ] ---
+window.toggleStatus = (docId, currentStatus, fullName) => {
+	const card = 
+		qs(`[data-id="${docId}"]`);
+	const nextStatus = 
+		!currentStatus;
+
+	pendingStatusChange = {
+		id: docId, 
+		status: nextStatus 
+	};
+
+	$("targetStudentInfo").innerHTML = `
+		<span class="text-primary">${docId}</span><br>
+		${fullName}
+	`;
+
+	$("statusActionText").innerText = 
+		nextStatus
+			? "เปิดใช้งาน"
+			: "ปิดใช้งาน";
+
+	const confirmBtn = 
+		$("confirmStatusBtn");
+
+	confirmBtn.className = 
+		nextStatus
+			? "btn btn-success px-4"
+			: "btn btn-danger px-4";
+
+	new bootstrap.Modal(
+		$("statusModal")
+	).show();
+
+};
+
+$("confirmStatusBtn").onclick = async () => {
+	const { id, status } = 
+		pendingStatusChange;
+	const btn = 
+		$("confirmStatusBtn");
+
+	btn.disabled = 
+		true;
+	btn.innerHTML =
+	'<span class="spinner-border spinner-border-sm"></span> กำลังบันทึก...';
+
+	if (!pendingStatusChange) {
+		showToast(
+			"ไม่พบข้อมูลสถานะที่ต้องการบันทึก", 
+			"danger"
+		);
+		return;
+	}
+
+	try {
+
+		await updateDoc(
+			doc(
+				db, 
+				"students", 
+				id
+			), {
+				active: status,
+				updatedAt: serverTimestamp(),
+			}
+		);
+
+		bootstrap.Modal.getInstance(
+			$("statusModal")
+		).hide();
+
+		updateUIOnly(id, status);
+
+		showToast(
+			`อัปเดตสถานะของ ${id} สำเร็จแล้ว`
+		);
+
+	} catch (error) {
+
+		await logError(
+			db, {
+				tag: "STATUS_UPDATE_FAILED",
+				message: `ไม่สามารถเปลี่ยนสถานะนักเรียนได้ (ID: ${id})`,
+				error: error,
+			}
+		);
+
+		showToast(
+			"ผิดพลาด: " + error.message, "danger"
+		);
+
+	} finally {
+
+		btn.disabled = 
+			false;
+		btn.innerText = 
+			"ยืนยัน";
+	}
+
+};
+
+function validateCsvHeaders(headers) {
+
+	return requiredHeaders.every(
+		header => 
+			headers.includes(header)
+	);
+
+}
+
+function showInvalidHeader() {
+
+	el.body.innerHTML = `
+		<div class="text-center p-4">
+			<div class="alert alert-danger mb-0">
+				❌ <b>รูปแบบไฟล์ไม่ถูกต้อง</b><br>
+				<small>
+					ต้องการคอลัมน์:
+					${requiredHeaders.join(", ")}
+				</small>
+			</div>
+		</div>
+	`;
+
+	$("importBtn")
+		.classList
+		.remove("is-visible");
+
+}
+
+function buildStudentData(row) {
+
+	const rawStatus =
+		row["Status"]
+			?.trim()
+			?.toUpperCase() || "";
+
+	return {
+
+		firstName:
+			row["ชื่อจริง"] || "",
+
+		lastName:
+			row["นามสกุล"] || "",
+
+		nickname:
+			row["ชื่อเล่น"] || "",
+
+		subject:
+			row["Subject"] || "",
+
+		active:
+			rawStatus !== "A",
+
+		phone:
+			row["Phone"] || "",
+
+		gender:
+			normalize.gender(
+				row["Gender"]
+			),
+
+		birthDate:
+			normalize.date(
+				row["BirthDate"]
+			)
+
+	};
+
+}
+
+function buildImportData(row) {
+
+	const data =
+		buildStudentData(row);
+
+	return {
+
+		...data,
+
+		searchTokens:
+			buildSearchTokens({
+				firstName: data.firstName,
+				lastName: data.lastName,
+				nickname: data.nickname,
+			})
+
+	};
+
+}
+
+async function loadStudentSnapshots(rows) {
+
+	const promises =
+		rows.map(row => {
+
+			const studentId =
+				row["ID"]?.trim();
+
+			if (!studentId)
+				return null;
+
+			return getDoc(
+				doc(
+					db,
+					"students",
+					studentId
+				)
+			);
+
+		});
+
+	return Promise.all(promises);
+
+}
+
+function getChanges(
+	oldData,
+	newData
+) {
+
+	const changes = [];
+
+	const compareMap = {
+
+		firstName: normalize.text,
+		lastName: normalize.text,
+		nickname: normalize.text,
+		subject: normalize.text,
+		phone: normalize.text,
+
+		gender: normalize.gender,
+
+		birthDate: normalize.date
+
+	};
+
+	Object.entries(compareMap)
+		.forEach(
+			([field, formatter]) => {
+
+				addChange(
+					changes,
+					field,
+					formatter(
+						oldData[field]
+					),
+					formatter(
+						newData[field]
+					)
+				);
+
+			}
+		);
+
+	addChange(
+		changes,
+		"active",
+		oldData.active
+			? "Active"
+			: "Inactive",
+		newData.active
+			? "Active"
+			: "Inactive"
+	);
+
+	return changes;
+
+}
+
+function addChange(
+	changes,
+	field,
+	oldValue,
+	newValue
+) {
+
+	if (oldValue === newValue)
+		return;
+
+	changes.push({
+		field,
+		oldValue,
+		newValue
+	});
+
+}
+
+function getPreviewStatus(
+	docSnap,
+	newData
+) {
+
+	if (
+		!docSnap ||
+		!docSnap.exists()
+	) {
+
+		return {
+			oldActive: null,
+			statusCompare: "new",
+		};
+
+	}
+
+	const oldData =
+		docSnap.data();
+
+	const changes  =
+		getChanges(
+			oldData,
+			newData
+		);
+
+	return {
+
+		oldActive:
+			oldData.active,
+
+		statusCompare:
+			changes.length === 0
+				? "same"
+				: "changed",
+
+		changes
+
+	};
+
+}
+
+function showPreviewLoading() {
+
+	el.body.innerHTML = `
+		<div class="text-center p-3">
+			กำลังเปรียบเทียบข้อมูล...
+		</div>
+	`;
+
+}
+
+function scrollToFirstCard() {
+
+	const firstCard =
+		qs(".student-card");
+
+	if (!firstCard)
+		return;
+
+	window.scrollTo({
+
+		top:
+			firstCard.offsetTop,
+
+		behavior:
+			"smooth"
+
+	});
+
+}
+
+function buildPreviewCard(
+	row,
+	docSnap
+) {
+
+	const studentId =
+		row["ID"]?.trim();
+
+	if (!studentId)
+		return "";
+
+	const data =
+		buildStudentData(row);
+
+	const {
+		oldActive,
+		statusCompare,
+		changes
+	} = getPreviewStatus(
+		docSnap,
+		data
+	);
+
+	console.log(changes);
+
+	return renderStudentCard(
+		studentId,
+		data,
+		{
+			mode: "preview",
+			oldActive,
+			statusCompare,
+			changes,
+		}
+	);
+
+}
+
+function renderPreview(
+	rows,
+	snapshots
+) {
+
+	const cards =
+		rows
+			.map(
+				(row, index) =>
+					buildPreviewCard(
+						row,
+						snapshots[index]
+					)
+			)
+			.join("");
+
+	el.body.innerHTML = `
+		<div class="alert alert-warning text-center">
+			⚠️ Preview:
+			พบ ${rows.length} รายการ
+		</div>
+
+		${cards}
+	`;
+
+	$("importBtn")
+		.classList
+		.add("is-visible");
+
+	scrollToFirstCard();
+
+}
+
+// ฟังก์ชันแสดงข้อความแล้วหายไปเอง
+function showToast(message, type = "success") {
+	const bgClass = {
+		success: "bg-success",
+		danger: "bg-danger",
+		info: "bg-info",
+		warning: "bg-warning"
+	};
+	const toastEl = 
+		$("liveToast");
+	const toastMessage = 
+		$("toastMessage");
+
+	// เปลี่ยนสีตามประเภท (success, danger, info)
+	toastEl.className = 
+		`toast align-items-center text-white ${
+			bgClass[type] || "bg-success"
+		} border-0`;
+
+	toastMessage.innerText = 
+		message;
+
+	const toast =
+		bootstrap.Toast.getOrCreateInstance(
+			toastEl,
+			{ delay: 2500 }
+		);
+		
+	toast.show();
+
+}
+
+function renderList(data, isNextPage = false) {
+	const html = 
+		data
+			.map((doc) => 
+				renderStudentCard(
+					doc.id, 
+					doc.data()
+				)
+			)
+			.join("");
+
+	if (isNextPage) {
+
+		el.body.insertAdjacentHTML(
+			"beforeend",
+			html
+		);
+
+	} else {
+
+		el.body.innerHTML = html;
+
+	}
+
+}
+
+function renderMockData() {
+	const resultBody = 
+		el.body;
+	const emptyState = 
+		el.empty;
+
+	emptyState.style.display = 
+		"none";
+
+	// ใส่ loading หลอก ๆ
+	resultBody.innerHTML =
+		'<div class="text-center p-3">กำลังโหลด mock...</div>';
+
+	setTimeout(() => {
+		resultBody.innerHTML = "";
+
+		const html =
+			mockStudents
+				.map(student =>
+					renderStudentCard(
+						student.id,
+						student
+					)
+				)
+				.join("");
+
+		resultBody.innerHTML = html;
+
+		el.summary.innerText = 
+			`Mock Data ทั้งหมด ${mockStudents.length} รายการ`;
+
+	});
+
+}
+
+function setLoading(page) {
+
+	el.body.innerHTML = 
+		`<div class="text-center">กำลังโหลดหน้า ${page}...</div>`;
+
+}
+
+function renderSummary(totalLoaded) {
+
+	el.summary.innerText =
+		`🔍 แสดงผล ${totalLoaded} รายการ`;
+
+}
+
+function showEmptyState(message) {
+
+	el.empty.classList.remove("hidden");
+	el.empty.innerText = message;
+
+}
+
+function detectSearchType(text) {
+    // ตัวเลขล้วน = ID
+    if (/^\d+$/.test(text)) {
+        return "id";
+    }
+
+    // ภาษาไทย / อังกฤษ = ชื่อ
+    return "token";
+}
+
+function handleScroll() {
+
+	if (window.scrollY > 300) {
+
+		scrollBtn.classList.add("show");
+
+	} else {
+
+		scrollBtn.classList.remove("show");
+
+	}
+
+	if (state.loading)
+		return;
+
+	if (!state.hasMore)
+		return;
+
+	const scrollBottom =
+		window.innerHeight + window.scrollY;
+
+	const pageHeight =
+		document.body.offsetHeight;
+
+	if (scrollBottom >= pageHeight - 200) {
+
+		searchStudent(true);
+
+	}
+
+}
+
+function updateUIOnly(id, status) {
+	const card = 
+		qs(`[data-id="${id}"]`);
+
+	if (!card) {
+		return;
+	}
+
+	const statusEl = 
+		card.querySelector(".status");
+
+	if (!statusEl) {
+			return;
+	}
+
+	statusEl.classList.remove(
+		"status-active", 
+		"status-inactive"
+	);
+
+	const isActive = status;
+
+	statusEl.classList.add(
+		isActive
+			? "status-active"
+			: "status-inactive"
+	);
+
+	statusEl.innerHTML = `
+		<span class="status-dot ${
+			isActive
+				? "dot-active"
+				: "dot-inactive"
+		}"></span>
+		${isActive ? "Active" : "Inactive"}
+	`;
+
+}
+
+function stopSearch() {
+    showEmptyState("🔍 พิมพ์อย่างน้อย 2 ตัวอักษร");
+    state.loading = false;
+}
+
+</script>
+</body>
+</html>
