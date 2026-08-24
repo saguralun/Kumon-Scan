@@ -268,6 +268,8 @@ export async function moveToCheckinScheduleInTransaction({
 
   const finalCheckinData = {
     nickname: studentData.nickname || "",
+    firstName: studentData.firstName || "",
+    lastName: studentData.lastName || "",
     ...(plannedData || {}),
     time: timeText,
   };

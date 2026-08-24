@@ -1479,66 +1479,21 @@ function addMenuTitle(
     "menu-title"
   );
 
+  // เด็กบางคนชื่อเล่นซ้ำกัน ต่อท้ายด้วยชื่อจริง-นามสกุลให้แยกออกว่าเป็นใคร
+  // (โชว์แค่ในเมนูนี้ ไม่โชว์ที่การ์ด) — อ่านจาก object ที่โหลดมาพร้อมตาราง
+  // อยู่แล้ว (ฝังไว้ตอน build ตาราง/เช็คอิน) ไม่ยิง Firestore เพิ่ม
+  const fullName =
+    `${student.firstName || ""} ${student.lastName || ""}`
+      .trim();
+
   titleBtn.innerText =
     `👤 ${
       student.nickname || "-"
-    }`;
+    }${fullName ? ` (${fullName})` : ""}`;
 
   menu.appendChild(
     titleBtn
   );
-
-  // เด็กบางคนชื่อเล่นซ้ำกัน โหลดชื่อจริง-นามสกุลมาต่อท้าย
-  // เพื่อให้พนักงานแยกได้ว่าเป็นใคร (โชว์แค่ในเมนูนี้ ไม่โชว์ที่การ์ด)
-  loadFullNameForMenuTitle(
-    titleBtn,
-    student.studentID
-  );
-
-}
-
-async function loadFullNameForMenuTitle(
-  titleBtn,
-  studentID
-){
-
-  if(!studentID) return;
-
-  try{
-
-    const snap =
-      await getDoc(
-        doc(db, "students", studentID)
-      );
-
-    if(!snap.exists()) return;
-
-    // ระหว่างรอโหลด เมนูอาจถูกปิด/สลับไปแสดงของนักเรียนคนอื่นแล้ว
-    // เช็คว่าปุ่มนี้ยังอยู่บนหน้าจอจริงก่อนแก้ข้อความ กันโชว์ชื่อผิดคน
-    if(!titleBtn.isConnected) return;
-
-    const data =
-      snap.data();
-
-    const fullName =
-      `${data.firstName || ""} ${data.lastName || ""}`
-        .trim();
-
-    if(fullName){
-
-      titleBtn.innerText +=
-        ` (${fullName})`;
-
-    }
-
-  }catch(error){
-
-    console.error(
-      "Load full name for menu title failed",
-      error
-    );
-
-  }
 
 }
 
@@ -2289,11 +2244,16 @@ async function returnToPlan(studentID, subject, slotKey) {
         throw "ไม่พบข้อมูลในช่อง Take Home (อาจถูกย้อนกลับไปแล้ว)";
       }
 
+      nicknameForToast =
+        studentData.nickname || studentID;
+
       // 1. ย้ายกลับจาก takeHome -> planned
+      // (เก็บทั้งก้อนเหมือนตอน planned -> takeHome เพื่อไม่ให้ firstName/
+      //  lastName/extras/time ที่เคยมีอยู่หายไปตอนย้อนกลับ)
       transaction.update(slotRef, {
         [`subjects.${subject}.takeHome.${studentID}`]: deleteField(),
         [`subjects.${subject}.planned.${studentID}`]: {
-          nickname: studentData.nickname,
+          ...studentData,
         },
       });
 

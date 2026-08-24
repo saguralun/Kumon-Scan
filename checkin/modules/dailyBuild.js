@@ -89,6 +89,10 @@ function buildScheduleClient(
     .planned[docSnap.id] = {
       nickname:
         data.nickname || "",
+      firstName:
+        data.firstName || "",
+      lastName:
+        data.lastName || "",
     };
 }
 
