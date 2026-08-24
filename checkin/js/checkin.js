@@ -40,6 +40,7 @@ import {
   getTimeDiffMinutes,
   refreshServerTime,
   MAX_SERVER_TIME_AGE_MINUTES,
+  escapeHtml,
 } from "/shared/index.js";
 
 import {
@@ -108,7 +109,7 @@ window.submitID = async function () {
 
   checkinSuccess = false;
 
-  if (isMockUser(currentInput)) {
+  if (DEV_MODE && isMockUser(currentInput)) {
     console.log("🚧 DEV MODE: skip server");
 
     setUIProcessing(true);
@@ -189,7 +190,7 @@ window.submitID = async function () {
 
     statusUI.showSuccess(
       `DEV MODE<br>
-      ${fakeStudent.firstName} ${fakeStudent.lastName} (${fakeStudent.nickname})<br>
+      ${escapeHtml(fakeStudent.firstName)} ${escapeHtml(fakeStudent.lastName)} (${escapeHtml(fakeStudent.nickname)})<br>
       ✔ จำลองเช็คอินสำเร็จ`,
     );
     checkinSuccess = true;
@@ -340,8 +341,8 @@ window.submitID = async function () {
     saveStudentSession(studentId, studentData);
 
     statusUI.showSuccess(
-      `ยินดีต้อนรับ ${studentData.firstName} ${studentData.lastName} (${studentData.nickname})<br>
-       เข้าเรียนวิชา ${studentData.subject} เวลา ${successResult.timeText}`,
+      `ยินดีต้อนรับ ${escapeHtml(studentData.firstName)} ${escapeHtml(studentData.lastName)} (${escapeHtml(studentData.nickname)})<br>
+       เข้าเรียนวิชา ${escapeHtml(studentData.subject)} เวลา ${successResult.timeText}`,
     );
 
     checkinSuccess = true;
@@ -589,7 +590,9 @@ async function verifyClientClock(
       config.serverTime
     );
 
-  if (diff <= MAX_SERVER_TIME_AGE_MINUTES) {
+  // diff === null หมายถึงไม่มี serverTime ให้เทียบเลย ต้อง refresh ก่อน
+  // (ห้ามผ่านเลย เพราะ `null <= 60` จะเป็น true และข้ามการตรวจนาฬิกาไปดื้อ ๆ)
+  if (diff !== null && diff <= MAX_SERVER_TIME_AGE_MINUTES) {
     return true;
   }
 
@@ -604,13 +607,13 @@ async function verifyClientClock(
     getTimeDiffMinutes(
       newServerTime
     );
-  
+
   console.log(
     "Diff After Refresh =",
     diff
   );
 
-  if (diff <= MAX_SERVER_TIME_AGE_MINUTES) {
+  if (diff !== null && diff <= MAX_SERVER_TIME_AGE_MINUTES) {
     return true;
   }
 

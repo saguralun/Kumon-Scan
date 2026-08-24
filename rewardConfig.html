@@ -488,6 +488,8 @@ import {
   getRarityStyle
 } from "../checkin/reward/rewardDom.js";
 
+import { escapeHtml } from "../shared/textUtils.js";
+
 import { qs } from "../checkin/ui/dom.js";
 
 const firebaseConfig = {
@@ -899,7 +901,7 @@ function fillTypeList(values){
   values.forEach(type=>{
 
     list.innerHTML += `
-      <option value="${type}">
+      <option value="${escapeHtml(type)}">
     `;
 
   });
@@ -1007,14 +1009,14 @@ function renderTable(items){
     tr.innerHTML = `
 
 <td style="font-size:28px">
-${item.icon}
+${escapeHtml(item.icon)}
 </td>
 
-<td>${item.id}</td>
+<td>${escapeHtml(item.id)}</td>
 
-<td>${item.name}</td>
+<td>${escapeHtml(item.name)}</td>
 
-<td>${item.type}</td>
+<td>${escapeHtml(item.type)}</td>
 
 <td>
 
@@ -1022,7 +1024,7 @@ ${item.icon}
 class="badge"
 style="${getRarityStyle(item.rarity)}">
 
-${item.rarity}
+${escapeHtml(item.rarity)}
 
 </span>
 
@@ -1132,13 +1134,13 @@ function getStatusBadge(item){
     case "Released":
 
       return `
-        🟢 <small>${item.releaseDate}</small>
+        🟢 <small>${escapeHtml(item.releaseDate)}</small>
       `;
 
     case "Coming":
 
       return `
-        🟡 <small>${item.releaseDate}</small>
+        🟡 <small>${escapeHtml(item.releaseDate)}</small>
       `;
 
   }

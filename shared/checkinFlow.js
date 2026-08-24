@@ -7,6 +7,10 @@ import {
   studentUpdateWeeklyPlan
 } from "/shared/studentService.js";
 
+import {
+  escapeHtml
+} from "/shared/textUtils.js";
+
 import * as progressUI from "../checkin/ui/progressUI.js";
 
 export function handleStudentResult({
@@ -69,9 +73,9 @@ export function handleAttendanceResult({
         attendanceResult.data;
 
       statusUI.showSuccess(
-        `${studentData.firstName}
-        ${studentData.lastName}
-        (${studentData.nickname})<br>
+        `${escapeHtml(studentData.firstName)}
+        ${escapeHtml(studentData.lastName)}
+        (${escapeHtml(studentData.nickname)})<br>
         ✅ วันนี้เรียนเสร็จแล้ว
         (${attData.totalMinutes} นาที)`
       );
@@ -93,9 +97,9 @@ export function handleAttendanceResult({
         );
 
       statusUI.showError(
-        `${studentData.firstName}
-        ${studentData.lastName}
-        (${studentData.nickname})<br>
+        `${escapeHtml(studentData.firstName)}
+        ${escapeHtml(studentData.lastName)}
+        (${escapeHtml(studentData.nickname)})<br>
         ⏳ กำลังเรียนอยู่
         (เริ่ม ${checkInText})`,
         "orange"

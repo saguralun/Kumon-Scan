@@ -97,6 +97,7 @@ import {
   checkVersionAndReload,
   formatFirestoreTime,
   checkoutAttendance,
+  escapeHtml,
 
 } from "/shared/index.js";
 
@@ -618,7 +619,7 @@ function renderQueue() {
 
         html: `
         <div class="checkout-toast checkout-toast-pending">
-          ⏳ ${name}
+          ⏳ ${escapeHtml(name)}
         </div>
       `,
       });
@@ -643,7 +644,7 @@ function renderQueue() {
 
         html: `
         <div class="checkout-toast">
-          ➡️ ${formatFirestoreTime(item.time)} ${item.nickname}
+          ➡️ ${formatFirestoreTime(item.time)} ${escapeHtml(item.nickname)}
         </div>
       `,
       });
@@ -668,7 +669,7 @@ function renderQueue() {
 
         html: `
         <div class="checkout-toast">
-          ⬅️ ${formatFirestoreTime(item.time)} ${item.nickname}
+          ⬅️ ${formatFirestoreTime(item.time)} ${escapeHtml(item.nickname)}
         </div>
       `,
       });
@@ -835,14 +836,14 @@ function createActiveCard({
 
       <div class="student-left">
         <span class="student-name">
-          ${item.nickname}
+          ${escapeHtml(item.nickname)}
         </span>
         ${badgeHTML}
       </div>
 
       <div class="student-middle">
         <div class="student-sub">
-          ${item.firstName} ${item.lastName}
+          ${escapeHtml(item.firstName)} ${escapeHtml(item.lastName)}
         </div>
 
         <div class="student-time">
@@ -865,8 +866,8 @@ function createActiveCard({
 
         <button
           class="checkout-btn"
-          onclick="checkout('${item.id}')"
-          aria-label="Checkout ${item.nickname}"
+          onclick="checkout('${escapeHtml(item.id)}')"
+          aria-label="Checkout ${escapeHtml(item.nickname)}"
         >
           <svg
             width="16"
@@ -916,7 +917,7 @@ function createCompletedCard({
 
       <div class="student-left">
         <span class="student-name">
-          ${item.nickname}
+          ${escapeHtml(item.nickname)}
         </span>
 
         <span class="subject-tag subject-${subject}">
@@ -928,8 +929,8 @@ function createCompletedCard({
 
       <div class="student-middle">
         <div class="student-sub">
-          ${item.firstName}
-          ${item.lastName}
+          ${escapeHtml(item.firstName)}
+          ${escapeHtml(item.lastName)}
         </div>
 
         <div class="student-time">

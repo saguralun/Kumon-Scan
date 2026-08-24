@@ -1,3 +1,5 @@
+import { escapeHtml } from "./textUtils.js";
+
 const fieldLabels = {
 	firstName: "ชื่อ",
 	lastName: "นามสกุล",
@@ -109,7 +111,7 @@ export function renderStudentCard(id, data, options = {}) {
 						<div class="name-diff-row">
 
 							<span class="old-value">
-								${change.oldValue}
+								${escapeHtml(change.oldValue)}
 							</span>
 
 							<span class="diff-arrow">
@@ -117,7 +119,7 @@ export function renderStudentCard(id, data, options = {}) {
 							</span>
 
 							<span class="new-value">
-								${change.newValue}
+								${escapeHtml(change.newValue)}
 							</span>
 
 						</div>
@@ -154,30 +156,30 @@ export function renderStudentCard(id, data, options = {}) {
 		"subject-default";
 
 	return `
-		<div class="student-card-item" data-id="${id}">
-			
+		<div class="student-card-item" data-id="${escapeHtml(id)}">
+
 		<!-- HEADER -->
 			<div class="student-header">
 
 				<!-- LEFT -->
 				<div class="student-left">
 					<div class="student-avatar ${active ? 'active' : 'inactive'}">
-						${firstName.charAt(0) || "?"}
+						${escapeHtml(firstName.charAt(0)) || "?"}
 					</div>
 
 					<div class="student-name-group">
 						<div class="student-id">
-							ID: ${id}
+							ID: ${escapeHtml(id)}
 						</div>
 
 						<div class="student-name">
-							${fullName}
+							${escapeHtml(fullName)}
 						</div>
 
 						${nameDiffHtml}
 
 						<div class="nickname-pill">
-							${nickname || "-"}
+							${escapeHtml(nickname) || "-"}
 						</div>
 					</div>
 				</div>
@@ -187,7 +189,10 @@ export function renderStudentCard(id, data, options = {}) {
 
 					${mode === "preview" ? "" : `
 						<button class="btn btn-success btn-sm d-flex align-items-center gap-1"
-							onclick="toggleStatus('${id}', ${active}, '${fullName}')">
+							data-student-id="${escapeHtml(id)}"
+							data-student-active="${active}"
+							data-student-fullname="${escapeHtml(fullName)}"
+							onclick="toggleStatus(this.dataset.studentId, this.dataset.studentActive === 'true', this.dataset.studentFullname)">
 							<i class="bi bi-pencil-square"></i>
 								จัดการ
 						</button>
@@ -215,7 +220,7 @@ export function renderStudentCard(id, data, options = {}) {
 						<i class="bi bi-mortarboard"></i> Subject
 					</span>
 					<span class="subject-badge ${subjectClass}">
-						${subject}
+						${escapeHtml(subject)}
 					</span>
 				</div>
 
@@ -276,15 +281,15 @@ function getChangedValue(
 		);
 
 	if (!change)
-		return currentValue;
+		return escapeHtml(currentValue);
 
 	return `
 		<div class="old-value">
-			${change.oldValue}
+			${escapeHtml(change.oldValue)}
 		</div>
 
 		<div class="new-value">
-			${change.newValue}
+			${escapeHtml(change.newValue)}
 		</div>
 	`;
 

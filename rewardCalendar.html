@@ -317,6 +317,8 @@ import {
   getRewardItems,
 } from "../checkin/reward/rewardItems.js";
 
+import { escapeHtml } from "../shared/textUtils.js";
+
 const firebaseConfig = {
   apiKey: "AIzaSyBfJ9F94tdUw6sIY8ffUPV0AKxXWzZig8s",
   authDomain: "scan-qrcode-kumon.firebaseapp.com",
@@ -476,10 +478,10 @@ function renderDay(day){
       <div
         class="reward"
         draggable="true"
-        data-id="${item.id}"
-        title="${item.id}"
+        data-id="${escapeHtml(item.id)}"
+        title="${escapeHtml(item.id)}"
       >
-        ${item.icon}
+        ${escapeHtml(item.icon)}
       </div>
 
     `).join("");

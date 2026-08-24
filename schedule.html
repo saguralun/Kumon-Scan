@@ -239,6 +239,7 @@ import {
   debugLog,
   logError,
   WheelPicker,
+  escapeHtml,
 } from "/shared/index.js";
 
 import { $, qs } from "./checkin/ui/dom.js";
@@ -777,12 +778,12 @@ function createStudentElement(
 
   wrapper.innerHTML = `
     <div class="tooltip-id">
-      ${s.studentID}
+      ${escapeHtml(s.studentID)}
     </div>
 
     <div class="student-main">
       <span class="student-icon ${iconClass}">
-        ${displayName}
+        ${escapeHtml(displayName)}
       </span>
 
       ${extraHtml}
@@ -790,7 +791,7 @@ function createStudentElement(
 
     ${
       s.time
-        ? `<div class="mobile-time">${s.time}</div>`
+        ? `<div class="mobile-time">${escapeHtml(s.time)}</div>`
         : ""
     }
   `;
@@ -1486,6 +1487,58 @@ function addMenuTitle(
   menu.appendChild(
     titleBtn
   );
+
+  // เด็กบางคนชื่อเล่นซ้ำกัน โหลดชื่อจริง-นามสกุลมาต่อท้าย
+  // เพื่อให้พนักงานแยกได้ว่าเป็นใคร (โชว์แค่ในเมนูนี้ ไม่โชว์ที่การ์ด)
+  loadFullNameForMenuTitle(
+    titleBtn,
+    student.studentID
+  );
+
+}
+
+async function loadFullNameForMenuTitle(
+  titleBtn,
+  studentID
+){
+
+  if(!studentID) return;
+
+  try{
+
+    const snap =
+      await getDoc(
+        doc(db, "students", studentID)
+      );
+
+    if(!snap.exists()) return;
+
+    // ระหว่างรอโหลด เมนูอาจถูกปิด/สลับไปแสดงของนักเรียนคนอื่นแล้ว
+    // เช็คว่าปุ่มนี้ยังอยู่บนหน้าจอจริงก่อนแก้ข้อความ กันโชว์ชื่อผิดคน
+    if(!titleBtn.isConnected) return;
+
+    const data =
+      snap.data();
+
+    const fullName =
+      `${data.firstName || ""} ${data.lastName || ""}`
+        .trim();
+
+    if(fullName){
+
+      titleBtn.innerText +=
+        ` (${fullName})`;
+
+    }
+
+  }catch(error){
+
+    console.error(
+      "Load full name for menu title failed",
+      error
+    );
+
+  }
 
 }
 

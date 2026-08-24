@@ -8,3 +8,4 @@ export * from "./logService.js";
 export * from "./debugService.js";
 export * from "./checkinFlow.js";
 export * from "./wheelPicker.js";
+export * from "./textUtils.js";

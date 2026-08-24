@@ -1,3 +1,4 @@
+import { escapeHtml } from "/shared/index.js";
 
 export function getRarityStyle(rarity){
 
@@ -126,7 +127,7 @@ export function buildRewardHTML({
       </div>
 
       <div class="reward-name">
-        ${rewardName || "Unknown"}
+        ${escapeHtml(rewardName) || "Unknown"}
       </div>
 
       <div class="reward-badges">
@@ -135,7 +136,7 @@ export function buildRewardHTML({
           class="reward-rarity"
           style="${getRarityStyle(rewardRarity)}"
         >
-          ${rewardRarity || "Unknown"}
+          ${escapeHtml(rewardRarity) || "Unknown"}
         </div>
 
       </div>

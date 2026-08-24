@@ -181,6 +181,10 @@ body {
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
 import { getFirestore, doc, getDoc, setDoc } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
 
+import {
+  loadStudentSession
+} from "./checkin/modules/storage.js";
+
 // ===== Firebase =====
 const firebaseConfig = {
   apiKey: "AIzaSyBfJ9F94tdUw6sIY8ffUPV0AKxXWzZig8s",
@@ -303,8 +307,25 @@ async function loadOrCreateBingo(studentId) {
 }
 
 // ===== init =====
+function requireStudentSession() {
+
+  const session =
+    loadStudentSession();
+
+  if (!session.studentId) {
+
+    alert("กรุณาเช็กอินก่อน");
+
+    location.href = "checkin.html";
+
+    throw new Error("NO_STUDENT_SESSION");
+  }
+
+  return session;
+}
+
 async function init() {
-  const studentId = "512";
+  const { studentId } = requireStudentSession();
 
   const { bingo, inventory } = await loadOrCreateBingo(studentId);
 
