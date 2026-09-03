@@ -135,6 +135,12 @@ const checkoutState = {
     new Map(),
 };
 
+// checkout สำเร็จแล้ว แต่การ์ดบนจออาจยังไม่ทันหายไปจนกว่า onSnapshot
+// จะอัปเดตกลับมา ถ้าปลด lock ทันทีแล้วมีคนกดรัว ๆ ซ้ำ จะยิง checkout
+// ซ้อนไปอีกรอบบน record ที่จบไปแล้ว (CHECKIN_DATA_INVALID) เลยหน่วงไว้
+// สักพักก่อนปลด lock เฉพาะตอนสำเร็จ ส่วนตอน fail ปลดทันทีให้กดใหม่ได้เลย
+const CHECKOUT_SUCCESS_UNLOCK_DELAY_MS = 5000;
+
 const activityState = {
   checkinQueue: [],
   checkoutQueue: [],
@@ -1325,10 +1331,11 @@ window.checkout = async function (
   );
 
   let snapshot;
+  let succeeded = false;
 
   try {
 
-    snapshot = 
+    snapshot =
       activeDataAll.find(
         (x) => x.id === id
       );
@@ -1358,6 +1365,10 @@ window.checkout = async function (
       db,
       attendanceData: snapshot
     });
+
+    // checkout ผ่าน transaction สำเร็จแล้วจริง ๆ ตรงนี้ ต่อให้ขั้นตอน
+    // แสดงผลข้างล่างพลาด ก็ยังต้องหน่วงก่อนปลด lock (ไม่ใช่ปลดทันที)
+    succeeded = true;
 
     removePendingCheckout(
       id
@@ -1437,15 +1448,37 @@ window.checkout = async function (
 
   } finally {
 
-    checkoutState.loading.delete(
-      id
-    );
+    if (succeeded) {
 
-    debugLog(
-      "CHECKOUT",
-      "end",
-      { id }
-    );
+      // สำเร็จแล้ว หน่วงก่อนปลด lock กันกดรัว ๆ ซ้ำตอนการ์ดยังไม่ทันหาย
+      setTimeout(() => {
+
+        checkoutState.loading.delete(
+          id
+        );
+
+        debugLog(
+          "CHECKOUT",
+          "end (delayed unlock)",
+          { id }
+        );
+
+      }, CHECKOUT_SUCCESS_UNLOCK_DELAY_MS);
+
+    } else {
+
+      // ไม่สำเร็จ ปลด lock ทันที ให้กดใหม่ได้เลยไม่ต้องรอ
+      checkoutState.loading.delete(
+        id
+      );
+
+      debugLog(
+        "CHECKOUT",
+        "end",
+        { id }
+      );
+
+    }
 
   }
 
