@@ -428,13 +428,32 @@ window.addEventListener("load", async () => {
 
     } else {
 
-      cachedTodaySetting = {
-          cacheDate: today,
-          ...(config.weekly?.[getTodayWeekday()] || {}),
-      };
+      const todayWeeklySetting =
+        config.weekly?.[getTodayWeekday()];
 
-      saveTodaySettingCache(cachedTodaySetting);
-      console.log("📦 cachedTodaySetting saved");
+      if (todayWeeklySetting) {
+
+        cachedTodaySetting = {
+            cacheDate: today,
+            ...todayWeeklySetting,
+        };
+
+        saveTodaySettingCache(cachedTodaySetting);
+        console.log("📦 cachedTodaySetting saved");
+
+      } else {
+
+        // ไม่มีข้อมูล weekly จริง ๆ (เช่น เน็ตสะดุดตอนโหลด config
+        // ทำให้ checkVersionAndReload fail-open มาเป็น weekly: null)
+        // ห้ามสร้าง cache ปลอมที่ไม่มี enabled/open/close เก็บไว้ ไม่งั้น
+        // checkTodayAndTime() จะอ่านว่า "วันนี้ปิด" ทั้งที่จริงแค่โหลดพลาด
+        cachedTodaySetting = null;
+
+        console.warn(
+          "⚠️ ไม่มีข้อมูล weekly ของวันนี้ — ข้ามการ cache ให้ checkTodayAndTime() ขอรีเฟรชแทน"
+        );
+
+      }
 
     }
 

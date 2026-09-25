@@ -641,11 +641,46 @@ export async function ensureDailyScheduleBuilt(
     }
 
     if (scheduleSummary.slotCount > 0) {
-      clearBuildStatusCache();
 
-      throw new Error(
-        `INCOMPLETE_DAILY_SCHEDULE expected=${expectedStudentCount} scheduled=${scheduleSummary.scheduledStudentCount} slots=${scheduleSummary.slotCount}`
+      // มี schedule ของวันนี้อยู่แล้วจริง (มีคน checkin ไปแล้วก็เป็นได้)
+      // ต่อให้นับจำนวนไม่ตรง (เช่น มีนักเรียน planStrength>=1 แต่ไม่มี
+      // timeSlot เลยไม่เคยถูกใส่เข้า schedule ตอน build) ก็ห้าม throw
+      // บล็อกทั้งระบบเด็ดขาด เพราะ rebuild ซ้ำก็ทำไม่ได้อยู่แล้ว
+      // (assertNoDailyScheduleExists จะ throw ทันทีถ้ามี slot อยู่)
+      // แค่ log ไว้เงียบ ๆ เพื่อตามไปดูทีหลังว่าทำไมนับไม่ตรง
+
+      console.warn(
+        "Daily schedule count mismatch — treating as built (non-blocking)",
+        {
+          expectedStudentCount,
+          ...scheduleSummary,
+        }
       );
+
+      logError(db, {
+        tag,
+        message: "SCHEDULE_COUNT_MISMATCH",
+        extra: {
+          expectedStudentCount,
+          ...scheduleSummary,
+        },
+      }).catch((logErr) => {
+        console.error(
+          "Log schedule count mismatch failed",
+          logErr
+        );
+      });
+
+      await markBuildCompleted(db);
+
+      progressUI.updateProgress("ready");
+
+      await reward.delay(200);
+
+      return {
+        status: "ready",
+        built: true,
+      };
     }
 
     alert(
