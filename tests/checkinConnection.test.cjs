@@ -249,7 +249,7 @@ test('overlapping write leases all need to finish before a reset is allowed', as
 
 test('config refresh shares the recovery and replaces a stale closed-day cache', async () => {
   const weekly = { 1: { enabled: true, open: '00:00', close: '23:59' } };
-  const h = setup({ 'system/config': { appVersion: '6.0.8', weekly, rarities: [], rewardItems: {} } });
+  const h = setup({ 'system/config': { appVersion: '6.0.9', weekly, rarities: [], rewardItems: {} } });
   Object.assign(h.context, {
     setRarities() {}, setRewardItems() {}, validateRewardConfig() {},
   });

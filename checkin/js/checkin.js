@@ -208,7 +208,7 @@ window.submitID = async function () {
         showCollectionForStudent(studentId, studentData);
       }
       statusUI.showStatus(submitted.job.status === "done"
-        ? "มีผลเช็กอินแล้ว ดูได้ในรายการด้านล่าง"
+        ? "มีผลเช็กอินแล้ว เปิดดู Collection ได้"
         : "มีรายการรอยืนยันอยู่แล้ว ไม่ต้องส่งซ้ำ", "#946200");
       return;
     }
@@ -222,7 +222,7 @@ window.submitID = async function () {
     }
     if (!outcome.value.attendanceResult) {
       showCollectionForStudent(studentId, studentData);
-      statusUI.showStatus("ยืนยันรายการแล้ว ดูผลในรายการด้านล่าง", "#267744");
+      statusUI.showStatus("ยืนยันรายการแล้ว เปิดดู Collection ได้", "#267744");
       return;
     }
     const { attendanceResult } = outcome.value;
@@ -845,7 +845,7 @@ function renderCheckinJobs() {
   const container = $("checkinQueue");
   if (!container) return;
   try {
-    const jobs = checkinJobs.list();
+    const jobs = checkinJobs.list().filter(job => ["pending", "failed"].includes(job.status));
     container.replaceChildren();
     for (const job of jobs) {
       const row = document.createElement("div");
@@ -854,22 +854,16 @@ function renderCheckinJobs() {
       const label = document.createElement("strong");
       label.textContent = `${job.nickname} (${job.subject})`;
       const detail = document.createElement("span");
-      const result = job.result;
-      detail.textContent = job.status === "done"
-        ? `${["active", "completed"].includes(result?.status) ? "มีบันทึกแล้ว" : "ยืนยันแล้ว"} ${result?.timeText || ""}${result?.reward ? " · " + result.reward.icon + " " + result.reward.name : ""}${result?.extras?.length ? " · " + result.extras.map(e => e.type + " " + e.level + (e.ws ? " " + e.ws : "")).join(", ") : ""}`
-        : job.status === "failed" ? "ต้องตรวจสอบ · กดลองใหม่ได้" : "รอยืนยันจาก server";
+      detail.textContent = job.status === "failed" ? "ต้องตรวจสอบ · กดลองใหม่ได้" : "รอยืนยันจาก server";
       text.append(label, detail);
       row.append(text);
-      if (job.status !== "pending") {
+      if (job.status === "failed") {
         const button = document.createElement("button");
         button.type = "button";
-        const dismiss = job.status === "done";
-        button.textContent = dismiss ? "\u00d7" : "ลองใหม่";
-        button.classList.toggle("dismiss-job", dismiss);
-        button.title = dismiss ? "ปิดรายการแจ้งเตือน" : "ลองส่งรายการอีกครั้ง";
+        button.textContent = "ลองใหม่";
+        button.title = "ลองส่งรายการอีกครั้ง";
         button.setAttribute("aria-label", `${button.title}: ${job.nickname}`);
-        button.addEventListener("click", () => job.status === "done"
-          ? checkinJobs.acknowledge(job.id) : checkinJobs.retry(job.id));
+        button.addEventListener("click", () => checkinJobs.retry(job.id));
         row.append(button);
       }
       container.append(row);

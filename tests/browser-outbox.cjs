@@ -67,7 +67,7 @@ export function writeBatch(){const writes=[];return{update:(ref,value)=>writes.p
       const date = new Date(), today = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Bangkok', year: 'numeric', month: '2-digit', day: '2-digit' }).format(date).replaceAll('-', '');
       const weekly = Object.fromEntries(Array.from({length:7},(_,i)=>[i,{enabled:true,open:'00:00',close:'23:59'}]));
       const db = {
-        'system/config': { appVersion:'6.0.8',serverTime:{__timestampISO:new Date(date.getTime()-3*86400000).toISOString()},weekly,
+        'system/config': { appVersion:'6.0.9',serverTime:{__timestampISO:new Date(date.getTime()-3*86400000).toISOString()},weekly,
           lastDailyBuildDate:today,rarities:[{id:'common',weight:100,badge:'Common'}],
           rewardItems:{test:{type:'shape',name:'Test Star',icon:'*',rarity:'common',releaseDate:'2020-01-01',enabled:true}} },
         ['dailySchedule/'+today]: {buildVersion:2,status:'complete'},
@@ -121,7 +121,11 @@ export function writeBatch(){const writes=[];return{update:(ref,value)=>writes.p
     await page.locator('#rewardConfirmBtn').waitFor({ state: 'visible' });
     const currentStatus = await page.locator('#status').innerText();
     await page.evaluate(() => { for (const done of window.__pendingCommits || []) done(); window.__pendingCommits = []; });
-    await page.waitForFunction(() => [...document.querySelectorAll('.checkin-job.done')].some(e => e.textContent.includes('102')));
+    await page.waitForFunction(() => Object.keys(localStorage).filter(k => k.startsWith('kumon-outbox-v1:checkin:')).some(k => {
+      const job = JSON.parse(localStorage.getItem(k)); return job.studentId === '102' && job.status === 'done';
+    }));
+    assert.equal(await page.locator('.checkin-job.done').count(), 0);
+    assert.equal(await page.locator('#checkinQueue').isVisible(), false);
     assert.equal(await page.locator('#status').innerText(), currentStatus);
     await page.locator('#rewardConfirmBtn').click();
     savedDatabase = await page.evaluate(() => localStorage.getItem('__test-db'));
@@ -130,21 +134,35 @@ export function writeBatch(){const writes=[];return{update:(ref,value)=>writes.p
     assert.equal(await page.evaluate(() => JSON.parse(sessionStorage.getItem('currentStudentId'))), '102');
     assert.equal(await page.evaluate(() => JSON.parse(sessionStorage.getItem('studentInventory')).test), 1);
     assert.equal(await page.evaluate(() => localStorage.getItem('__test-db')), savedDatabase);
-    const close = page.locator('.checkin-job.done .dismiss-job').first();
-    assert.equal(await close.innerText(), '\u00d7');
-    assert.equal(await close.getAttribute('title'), 'ปิดรายการแจ้งเตือน');
-    assert.ok(await close.evaluate(el => getComputedStyle(el).color !== 'rgb(255, 255, 255)' && el.getBoundingClientRect().width >= 44));
+    assert.equal(await page.locator('#collectionLinkWrapper').isVisible(), true);
+    assert.equal(await page.locator('#checkinQueue').isVisible(), false);
+    await page.evaluate(() => {
+      const key = Object.keys(localStorage).filter(k => k.startsWith('kumon-outbox-v1:checkin:')).find(k => JSON.parse(localStorage.getItem(k)).studentId === '101');
+      const job = JSON.parse(localStorage.getItem(key));
+      job.status = 'failed'; job.error = 'Simulated recoverable queue error';
+      localStorage.setItem(key, JSON.stringify(job));
+      window.dispatchEvent(new StorageEvent('storage', { key }));
+    });
+    const retry = page.locator('.checkin-job.failed button');
+    await retry.waitFor();
+    assert.equal(await retry.innerText(), 'ลองใหม่');
+    assert.ok(await retry.evaluate(el => el.getBoundingClientRect().width >= 44));
+    await retry.click();
+    await page.waitForFunction(() => document.querySelector('#checkinQueue').hidden);
+    assert.equal(await page.evaluate(() => JSON.parse(sessionStorage.getItem('currentStudentId'))), '102');
+    assert.equal(await page.evaluate(() => localStorage.getItem('__test-db')), savedDatabase);
     await page.waitForFunction(() => getComputedStyle(document.querySelector('#loadingOverlay')).opacity === '0');
     await page.screenshot({ path: path.join(os.tmpdir(), 'kumon-collection-repeat-mobile.png'), fullPage: true });
-    const pendingBeforeClose = await page.locator('.checkin-job').count();
-    await close.click();
-    assert.equal(await page.locator('.checkin-job').count(), pendingBeforeClose - 1);
+    assert.equal(await page.locator('.checkin-job').count(), 0);
     assert.equal(await page.evaluate(() => localStorage.getItem('__test-db')), savedDatabase);
     await page.evaluate(() => { window.__holdCommit = true; });
     await enter('104');
     await page.waitForFunction(() => !document.querySelector('#enterBtn').disabled, { timeout: 12000 });
     await page.reload();
-    await page.waitForFunction(() => [...document.querySelectorAll('.checkin-job.done')].some(e => e.textContent.includes('104')));
+    await page.waitForFunction(() => Object.keys(localStorage).filter(k => k.startsWith('kumon-outbox-v1:checkin:')).some(k => {
+      const job = JSON.parse(localStorage.getItem(k)); return job.studentId === '104' && job.status === 'done';
+    }));
+    assert.equal(await page.locator('#checkinQueue').isVisible(), false);
     const inventory = await page.evaluate(() => JSON.parse(localStorage.getItem('__test-db'))['students/104'].inventory);
     assert.equal(inventory.test, 1);
     await page.goto(base + '/result.html');
@@ -162,9 +180,11 @@ export function writeBatch(){const writes=[];return{update:(ref,value)=>writes.p
     await page.goto(base + '/checkin.html');
     await page.waitForFunction(() => document.querySelector('#loadingOverlay').classList.contains('hide'));
     savedDatabase = await page.evaluate(() => localStorage.getItem('__test-db'));
+    const hasReceipt = await page.evaluate(id => JSON.parse(localStorage.getItem('kumon-outbox-v1:checkin:' + encodeURIComponent(id)))?.status === 'done', id);
     await enter(id.split('_')[0]);
-    await page.waitForFunction(() => document.querySelector('#status').textContent.includes('วันนี้เรียนเสร็จแล้ว'));
+    await page.waitForFunction(message => document.querySelector('#status').textContent.includes(message), hasReceipt ? 'มีผลเช็กอินแล้ว' : 'วันนี้เรียนเสร็จแล้ว');
     await page.waitForFunction(() => !document.querySelector('#enterBtn').disabled);
+    assert.equal(await page.locator('#checkinQueue').isVisible(), false);
     assert.equal(await page.evaluate(() => JSON.parse(sessionStorage.getItem('currentStudentId'))), id.split('_')[0]);
     assert.equal(await page.evaluate(() => localStorage.getItem('__test-db')), savedDatabase);
     await page.locator('#collectionLinkWrapper a').click();
