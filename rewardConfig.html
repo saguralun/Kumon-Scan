@@ -491,6 +491,8 @@ import {
 import { escapeHtml } from "../shared/textUtils.js";
 
 import { qs } from "../checkin/ui/dom.js";
+import { validateRewardConfig } from "./checkin/reward/rewardConfigValidator.js";
+import { RARITY } from "./checkin/reward/rewardRarity.js";
 
 const firebaseConfig = {
   apiKey: "AIzaSyBfJ9F94tdUw6sIY8ffUPV0AKxXWzZig8s",
@@ -661,6 +663,8 @@ saveBtn.onclick = async () => {
 
   try {
 
+    validateRewardConfig({ rewardItems: [newData], rarities: Object.values(RARITY) });
+
     if (isCreating) {
 
       if (!newData.id) {
@@ -724,7 +728,7 @@ saveBtn.onclick = async () => {
 
     console.error(err);
 
-    alert("Save failed");
+    alert("Save failed: " + err.message);
 
     saveBtn.textContent = "💾 Save";
 

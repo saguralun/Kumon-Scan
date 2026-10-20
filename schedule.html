@@ -36,6 +36,7 @@
 
     <div class="right-group">
       <div id="liveClock" class="live-clock">00:00:00</div>
+      <div id="scheduleDataStatus" class="data-status" role="status">กำลังเชื่อมต่อ</div>
       <div id="versionLabel" class="version-label">
         <span id="versionText">Version</span>
       </div>
@@ -227,9 +228,8 @@ import {
 import {
   APP_VERSION,
   getActiveStudent,
-  createAttendance,
-  studentUpdateWeeklyPlan,
-  moveToCheckinSchedule,
+  processAttendance,
+  updateScheduleExtras,
   checkVersionAndReload,
   getTodayThai,
   getNow,
@@ -267,6 +267,8 @@ const teachingDays =
   [1, 4, 5, 6];
 
 let isProcessing = false;
+let scheduleActionBusy = false;
+let scheduleFromCache = true;
 let firstLoad = true;
 let currentSlots = {};
 let mobileSubject = "ME";
@@ -384,7 +386,9 @@ function loadSchedule() {
 
   renderSkeleton();
 
-  onSnapshot(slotsRef, (snapshot) => {
+  onSnapshot(slotsRef, { includeMetadataChanges: true }, (snapshot) => {
+    scheduleFromCache = snapshot.metadata.fromCache;
+    updateScheduleDataStatus();
 
     const slots = {};
 
@@ -416,7 +420,7 @@ function showVersionUpdate(serverVersion){
   $("versionUpdateText").innerHTML =
     `
     พบเวอร์ชันใหม่<br>
-    ${APP_VERSION} ➜ ${serverVersion}
+    ${escapeHtml(APP_VERSION)} ➜ ${escapeHtml(serverVersion)}
     `;
 
   $("versionUpdateOverlay")
@@ -1215,7 +1219,7 @@ function renderBadges(
           ${icon}
 
           <div class="badge-tooltip">
-            ${detail}
+            ${escapeHtml(detail)}
           </div>
         </div>
       `;
@@ -1224,7 +1228,7 @@ function renderBadges(
     // detail mode
     return `
       <div class="badge-detail">
-        ${icon} ${detail}
+        ${icon} ${escapeHtml(detail)}
       </div>
     `;
 
@@ -1937,45 +1941,24 @@ async function checkIn(
         scheduleStudent.extras || []
     };
 
-    const newAttendance = 
-      await createAttendance({
+    const result =
+      await processAttendance({
         db,
         studentId: studentID,
         studentData,
         today,
+        scheduleData,
+        plannedSlot: slotKey,
+        rewardEligible: false,
+        autoCheckoutPrevious: false,
       });
 
-    const { timeText, realSlot } = 
-      newAttendance;
-
-    debugLog(
-      TAG, 
-      "CREATE_ATTENDANCE_RESULT", 
-      newAttendance
-    );
-
-    await studentUpdateWeeklyPlan({
-      db,
-      studentId: studentID,
-      studentData,
-      checkInText: timeText,
-    });
-
-    debugLog(
-      TAG, 
-      "UPDATE_WEEKLY_PLAN_DONE"
-    );
-
-    await moveToCheckinSchedule({
-      db,
-      today,
-      studentId: studentID,
-      studentData,
-      scheduleData, 
-      plannedSlot: slotKey,
-      realSlot,
-      timeText,
-    });
+    if (result.status !== "created") {
+      alert(result.status === "completed"
+        ? "วันนี้เรียนเสร็จแล้ว"
+        : result.status === "active" ? "กำลังเรียนอยู่แล้ว" : "ไม่สามารถบันทึกเข้าเรียนได้ กรุณาลองใหม่");
+      return;
+    }
 
     debugLog(
       TAG, 
@@ -2345,220 +2328,35 @@ function findStudentSection(subjectData, studentID){
 }
 
 async function addExtraWS({studentID,subject,slotKey,level,ws}){
-  const today = 
-    getTodayThai();
-
-  const slotRef = 
-    doc(
-      db,
-      "dailySchedule",
-      today,
-      "slots",
-      slotKey
-    );
-
-  const snap = 
-    await getDoc(slotRef);
-
-  if(!snap.exists()) 
-    return;
-
-  const data = 
-    snap.data();
-  const subjectData = 
-    data?.subjects?.[subject];
-
-  const section = 
-    findStudentSection(
-      subjectData,
-      studentID
-    );
-
-  if(!section) 
-    return;
-
-  const student = 
-    subjectData?.[section]?.[studentID];
-
-  const extras = 
-    student.extras || [];
-
-  extras.push({
-    type:"WS",
-    level,
-    ws
+  await updateScheduleExtras({
+    db, today: getTodayThai(), studentId: studentID, subject, slotKey,
+    extra: { type: "WS", level, ws },
   });
-
-  await updateDoc(slotRef,{
-    [`subjects.${subject}.${section}.${studentID}.extras`]:
-      extras
-  });
-
   showToast(`📘 เพิ่ม ${level} ${ws}`);
-
 }
 
 async function addExtraAT({studentID,subject,slotKey,level}){
-
-  const today = 
-    getTodayThai();
-  const slotRef = 
-    doc(
-      db,
-      "dailySchedule",
-      today,
-      "slots",
-      slotKey
-    );
-
-  const snap = 
-    await getDoc(slotRef);
-
-  if(!snap.exists()) 
-    return;
-
-  const data = 
-    snap.data();
-
-  const subjectData = 
-    data?.subjects?.[subject];
-
-  const section = 
-    findStudentSection(
-      subjectData,
-      studentID
-    );
-
-  if(!section) 
-    return;
-
-  const student = 
-    subjectData?.[section]?.[studentID];
-
-  const extras = 
-    student.extras || [];
-
-  extras.push({
-    type:"AT",
-    level
+  await updateScheduleExtras({
+    db, today: getTodayThai(), studentId: studentID, subject, slotKey,
+    extra: { type: "AT", level },
   });
-
-  await updateDoc(slotRef,{
-    [`subjects.${subject}.${section}.${studentID}.extras`]:
-      extras
-  });
-
   showToast(`📝 เพิ่ม AT ${level}`);
-
 }
 
 async function removeLastWS({studentID,subject,slotKey}){
-
-  const today = 
-    getTodayThai();
-  const slotRef = 
-    doc(
-      db,
-      "dailySchedule",
-      today, 
-      "slots",
-      slotKey
-    );
-
-  const snap = 
-    await getDoc(slotRef);
-  if(!snap.exists()) 
-    return;
-
-  const data = 
-    snap.data();
-  const subjectData = 
-    data?.subjects?.[subject];
-
-  const section = 
-    findStudentSection(
-      subjectData,
-      studentID
-    );
-
-  if(!section) 
-    return;
-
-  const student = 
-    subjectData?.[section]?.[studentID];
-
-  let extras = 
-    student.extras || [];
-
-  for(let i=extras.length-1; i>=0; i--){
-
-    if(extras[i].type === "WS"){
-      extras.splice(i,1);
-      break;
-    }
-
-  }
-
-  await updateDoc(slotRef,{
-    [`subjects.${subject}.${section}.${studentID}.extras`]:
-      extras
+  await updateScheduleExtras({
+    db, today: getTodayThai(), studentId: studentID, subject, slotKey,
+    removeType: "WS",
   });
-
   showToast("↩️ ลบ WS ล่าสุด");
-
 }
 
-async function removeLastAT({studentID, subject,slotKey}){
-
-  const today = 
-    getTodayThai();
-  const slotRef = 
-    doc(
-      db,
-      "dailySchedule",
-      today,
-      "slots", 
-      slotKey
-    );
-
-  const snap = 
-    await getDoc(slotRef);
-  if(!snap.exists()) 
-    return;
-
-  const data = 
-    snap.data();
-  const subjectData = 
-    data?.subjects?.[subject];
-
-  const section = 
-    findStudentSection(
-      subjectData,
-      studentID
-    );
-
-  if(!section) 
-    return;
-
-  const student =
-    subjectData?.[section]?.[studentID];
-  let extras =
-    student.extras || [];
-
-  for(let i=extras.length-1; i>=0; i--){
-    if(extras[i].type === "AT"){
-      extras.splice(i,1);
-      break;
-    }
-  }
-
-  await updateDoc(slotRef,{
-    [`subjects.${subject}.${section}.${studentID}.extras`]:
-      extras
+async function removeLastAT({studentID,subject,slotKey}){
+  await updateScheduleExtras({
+    db, today: getTodayThai(), studentId: studentID, subject, slotKey,
+    removeType: "AT",
   });
-
   showToast("↩️ ลบ AT ล่าสุด");
-
 }
 
 function showConfirm({
@@ -2581,15 +2379,10 @@ function showConfirm({
 
   };
 
-  $("confirmBtn").onclick = ()=> {
-
+  $("confirmBtn").onclick = () => runScheduleAction(async () => {
+    if (typeof onConfirm === "function") await onConfirm();
     modal.style.display = "none";
-
-    if(typeof onConfirm === "function"){
-      onConfirm();
-    }
-
-  };
+  });
 
 }
 
@@ -2647,7 +2440,7 @@ function showAddWSModal({
 
   modal.style.display = "flex";
 
-  $("addWSConfirmBtn").onclick = async ()=> {
+  $("addWSConfirmBtn").onclick = () => runScheduleAction(async () => {
 
     const level =
       levelPicker.getValue();
@@ -2690,9 +2483,9 @@ function showAddWSModal({
       );
     }
 
-  };
+  });
 
-  $("addWSCancelLastBtn").onclick = async ()=> {
+  $("addWSCancelLastBtn").onclick = () => runScheduleAction(async () => {
 
     try{
 
@@ -2726,7 +2519,7 @@ function showAddWSModal({
       );
     }
 
-  };
+  });
 
   $("addWSCloseBtn").onclick = ()=> {
 
@@ -2745,15 +2538,37 @@ function handleActionWithConfirm(config) {
   showConfirm({
     title: title,
     desc: desc,
-    onConfirm: () => {
+    onConfirm: async () => {
       if (typeof action === "function") {
-        action();
+        await action();
       }
       hideMenu(); // ปิดเมนูหลังจากกดตกลง
     },
 
   });
 
+}
+
+function updateScheduleDataStatus() {
+  const label = $("scheduleDataStatus");
+  if (label) label.textContent = scheduleActionBusy ? "กำลังบันทึก"
+    : scheduleFromCache ? "ข้อมูลในเครื่อง · รอเชื่อมต่อ" : "ข้อมูลล่าสุดจาก server";
+}
+
+async function runScheduleAction(action) {
+  if (scheduleActionBusy) return;
+  scheduleActionBusy = true;
+  const buttons = ["confirmBtn", "cancelBtn", "addWSConfirmBtn", "addWSCancelLastBtn", "addWSCloseBtn"]
+    .map(id => $(id)).filter(Boolean);
+  buttons.forEach(button => { button.disabled = true; });
+  updateScheduleDataStatus();
+  try { await action(); }
+  catch (error) { console.error(error); showToast("บันทึกไม่สำเร็จ กรุณาลองใหม่", "error"); }
+  finally {
+    scheduleActionBusy = false;
+    buttons.forEach(button => { button.disabled = false; });
+    updateScheduleDataStatus();
+  }
 }
 
 function updateTotalCounts(slots) {

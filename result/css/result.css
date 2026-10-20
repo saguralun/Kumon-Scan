@@ -602,7 +602,29 @@ h2 {
 }
 
 .checkout-toast-pending {
+  display: flex;
+  align-items: center;
   background: rgba(255, 247, 237, 0.72);
+}
+
+.checkout-pending-name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.checkout-retry-btn {
+  flex-shrink: 0;
+  pointer-events: auto;
+  margin-left: 6px;
+  padding: 4px 6px;
+  border: 1px solid #d97706;
+  border-radius: 4px;
+  background: #fff7ed;
+  color: #92400e;
+  font: inherit;
+  cursor: pointer;
 }
 
 .checkout-toast-more {
@@ -811,3 +833,4 @@ h2 {
   font-weight:bold;
   line-height: 1;
 }
+.data-status { font-size: 11px; color: #65706d; margin: 4px 0 8px; text-align: center; }

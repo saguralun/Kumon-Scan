@@ -1,6 +1,7 @@
 import {
   doc,
   getDoc,
+  getDocFromServer,
 } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
 
 import { debugLog, logError } from "/shared/index.js";
@@ -25,18 +26,20 @@ const EMPTY_VERSION_DATA = {
   rewardItemsMap: {},
 };
 
-export async function checkVersionAndReload(db) {
+export async function checkVersionAndReload(db, { fromServer = false } = {}) {
   const tag = "checkVersionAndReload";
 
   try {
     const ref = doc(db, "system", "config");
 
-    const snap = await getDoc(ref);
+    const snap = await (fromServer ? getDocFromServer(ref) : getDoc(ref));
 
     if (!snap.exists()) {
+      if (fromServer) throw new Error("SYSTEM_CONFIG_NOT_FOUND");
       debugLog(tag, "⚠️ config not found");
 
       return {
+        ...EMPTY_VERSION_DATA,
         ok: true,
         serverTime: null,
         lastDailyBuildDate: null,
@@ -102,6 +105,8 @@ export async function checkVersionAndReload(db) {
     };
 
   } catch (err) {
+    // Check-in must distinguish an unavailable config from a closed school day.
+    if (fromServer) throw err;
     console.error(err);
 
     const isOffline =
@@ -149,8 +154,8 @@ function normalizeSystemConfig(data) {
   const rewardItemsMap = data.rewardItems ?? {};
 
   const rewardItems = Object.entries(rewardItemsMap).map(([id, item]) => ({
-    id,
     ...item,
+    id,
   }));
 
   return {
@@ -168,10 +173,17 @@ function initializeModules(config) {
 
   setRarities(config.rarities);
 
-  validateRewardConfig({
-    rewardItems: config.rewardItems,
-    rarities: config.rarities,
-  });
+  const valid = [];
+  for (const item of config.rewardItems) {
+    try {
+      validateRewardConfig({ rewardItems: [item], rarities: config.rarities });
+      valid.push(item);
+    } catch (error) {
+      console.warn("Ignoring invalid reward item", { id: item.id, message: error.message });
+    }
+  }
+  config.rewardItems = valid;
+  config.rewardItemsMap = Object.fromEntries(valid.map(item => [item.id, item]));
 
   setRewardItems(config.rewardItems);
 

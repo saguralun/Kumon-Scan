@@ -1,6 +1,7 @@
 import {
   delay
 } from "./rewardUtils.js";
+import { escapeHtml } from "../../shared/textUtils.js";
 
 import {
   buildRewardHTML 
@@ -141,15 +142,15 @@ export async function showExtraPopup({
   // แสดงข้อความของ Popup
   text.innerHTML = `
     <div class="extra-title">
-      ${extraDisplay.title}
+      ${escapeHtml(extraDisplay.title)}
     </div>
 
     <div class="extra-desc">
-      ${extraDisplay.desc}
+      ${escapeHtml(extraDisplay.desc)}
     </div>
 
     <div class="extra-sub">
-      ${extraDisplay.sub}
+      ${escapeHtml(extraDisplay.sub)}
     </div>
   `;
 

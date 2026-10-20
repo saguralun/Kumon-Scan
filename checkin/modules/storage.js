@@ -61,11 +61,12 @@ export function loadBuildStatusCache() {
 
 }
 
-export function saveBuildStatusCache() {
+export function saveBuildStatusCache(metadata = {}) {
 
   saveCache("dailyBuildStatus", {
     cacheDate: getTodayThai(),
     built: true,
+    ...metadata,
   });
 
 }

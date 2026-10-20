@@ -2,6 +2,7 @@
 import { 
   $ 
 } from "../../checkin/ui/dom.js";
+import { escapeHtml } from "../../shared/textUtils.js";
 
 export function openModal(
   item,
@@ -27,11 +28,11 @@ export function openModal(
     owned
       ? `
         <div class="modal-row">
-          ⭐ Rarity: ${item.rarity}
+          ⭐ Rarity: ${escapeHtml(item.rarity)}
         </div>
 
         <div class="modal-row">
-          📦 Collected: ${owned} ครั้ง
+          📦 Collected: ${escapeHtml(owned)} ครั้ง
         </div>
       `
       : `
@@ -54,7 +55,7 @@ export function openReleaseModal(item){
   $("modalDetail").innerHTML = `
 
     <div class="modal-row">
-      ⭐ ${item.rarity}
+      ⭐ ${escapeHtml(item.rarity)}
     </div>
 
     <div class="modal-row">
@@ -62,7 +63,7 @@ export function openReleaseModal(item){
     </div>
 
     <div class="modal-heading">
-      ${item.releaseDate}
+      ${escapeHtml(item.releaseDate)}
     </div>
 
   `;
@@ -92,15 +93,15 @@ export function openComingSoon(
 
     <br>
 
-    ${collection.description}
+    ${escapeHtml(collection.description)}
 
     <br><br>
 
-    📅 ${collection.releaseDate}
+    📅 ${escapeHtml(collection.releaseDate)}
 
     <br><br>
 
-    ${collection.message}
+    ${escapeHtml(collection.message)}
 
   `;
 

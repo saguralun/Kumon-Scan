@@ -440,3 +440,28 @@ export async function removePlannedStudent({
     [`subjects.${subject}.planned.${studentId}`]: deleteField(),
   });
 }
+
+export async function updateScheduleExtras({
+  db, today, studentId, subject, slotKey, extra = null, removeType = null,
+}) {
+  const ref = doc(db, "dailySchedule", today, "slots", slotKey);
+  return runTransaction(db, async tx => {
+    const snap = await tx.get(ref);
+    const data = snap.data()?.subjects?.[subject];
+    const section = ["planned", "checkedIn", "completed", "takeHome"]
+      .find(key => data?.[key]?.[studentId]);
+    if (!section) throw new Error("SCHEDULE_STUDENT_NOT_FOUND");
+
+    const extras = [...(data[section][studentId].extras || [])];
+    if (extra) extras.push(extra);
+    if (removeType) {
+      for (let i = extras.length - 1; i >= 0; i--) {
+        if (extras[i].type === removeType) {
+          extras.splice(i, 1);
+          break;
+        }
+      }
+    }
+    tx.update(ref, { [`subjects.${subject}.${section}.${studentId}.extras`]: extras });
+  });
+}

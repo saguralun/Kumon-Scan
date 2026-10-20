@@ -71,6 +71,7 @@ import {
 } from "../checkin/reward/rewardItems.js";
 
 import { $ } from "../checkin/ui/dom.js";
+import { escapeHtml } from "./shared/textUtils.js";
 
 function requireStudentSession() {
 
@@ -92,9 +93,9 @@ function requireStudentSession() {
 function initStudentHeader() {
 
   $("studentInfo").innerHTML = `
-    👤 ${session.profile?.nickname || "-"}
+    👤 ${escapeHtml(session.profile?.nickname || "-")}
     &nbsp;•&nbsp;
-    🆔 ${session.studentId}
+    🆔 ${escapeHtml(session.studentId)}
   `;
 
 }

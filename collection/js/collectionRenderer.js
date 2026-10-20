@@ -1,4 +1,5 @@
 import { $ } from "../../checkin/ui/dom.js";
+import { escapeHtml } from "../../shared/textUtils.js";
 
 import {
   getCollectionProgress,
@@ -27,7 +28,7 @@ export function renderCollection(inventory){
 
   updateProgress(inventory);
 
-  const groups = {};
+  const groups = Object.create(null);
 
   getAvailableRewardItems().forEach(item => {
 
@@ -68,7 +69,7 @@ export function renderCollection(inventory){
       <div class="section-header">
 
         <div class="section-title">
-          ${sectionIcon} ${capitalize(type)}
+          ${escapeHtml(sectionIcon)} ${escapeHtml(capitalize(type))}
         </div>
 
         <div class="section-right">
@@ -335,15 +336,15 @@ function createUpcomingCard(item){
   card.innerHTML=`
 
     <div class="icon silhouette">
-      ${item.icon}
+      ${escapeHtml(item.icon)}
     </div>
 
     <div class="name">
-      ${item.name}
+      ${escapeHtml(item.name)}
     </div>
 
     <div class="amount">
-      ${item.releaseDate}
+      ${escapeHtml(item.releaseDate)}
     </div>
 
   `;
@@ -366,8 +367,8 @@ function buildCardHTML(
 
   return `
 
-    <div class="rarity ${item.rarity}">
-      ${getRarityBadge(item.rarity)}
+    <div class="rarity ${escapeHtml(item.rarity)}">
+      ${escapeHtml(getRarityBadge(item.rarity))}
     </div>
 
     <div class="
@@ -375,7 +376,7 @@ function buildCardHTML(
     ">
       ${
         owned
-          ? item.icon
+          ? escapeHtml(item.icon)
           : "❔"
       }
     </div>
@@ -383,7 +384,7 @@ function buildCardHTML(
     <div class="amount">
       ${
         owned
-          ? `x${amount}`
+          ? `x${escapeHtml(amount)}`
           : "Locked"}
     </div>
   `;

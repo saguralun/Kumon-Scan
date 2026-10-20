@@ -3,7 +3,8 @@ import {
 } from "./rewardEngine.js";
 
 import {
-  updateStudentReward
+  updateStudentReward,
+  buildStudentRewardUpdate,
 } from "./rewardService.js";
 
 import {
@@ -22,11 +23,29 @@ import {
 
 // จัดการขั้นตอนทั้งหมดของระบบรางวัลหลังเช็กอิน
 // ตั้งแต่สุ่มรางวัล บันทึกข้อมูล ซิงก์ข้อมูล ไปจนถึงแสดงผลบนหน้าจอ
+export function prepareCheckinReward({ studentData, extras = [], attendanceId = null }) {
+  const previous = attendanceId && studentData.rewardReceipt?.attendanceId === attendanceId
+    ? studentData.rewardReceipt.reward : null;
+  const rolled = previous || rollReward({
+    badLuckStreak: studentData.rewardStats?.badLuckStreak || 0,
+    inventory: migrateInventory(studentData.inventory || {}).inventory,
+  });
+  return buildStudentRewardUpdate({
+    studentData, extras, attendanceId, rewardId: rolled.id, rewardRarity: rolled.rarity,
+    reward: {
+      id: rolled.id, name: rolled.name, icon: rolled.icon || rolled.emoji,
+      rarity: rolled.rarity, type: rolled.type,
+    },
+  });
+}
+
 export async function processCheckinReward({
   db,
   studentId,
   studentData,
   extras = [],
+  attendanceId = null,
+  savedReward = null,
   stopRandomAnimation
 }) {
   const tag = "processCheckinReward";
@@ -40,22 +59,7 @@ export async function processCheckinReward({
   const endRollReward = 
     measure("ROLL_REWARD");
 
-  const {
-    inventory
-  } = migrateInventory(
-    studentData.inventory
-  );
-
-  const rewardResult =
-    rollReward({
-      badLuckStreak:
-        studentData.rewardStats
-          ?.badLuckStreak || 0,
-
-      inventory
-    });
-  
-  console.log(rewardResult);
+  const proposal = savedReward ? null : prepareCheckinReward({ studentData, extras, attendanceId });
   
   endRollReward.end();
 
@@ -66,15 +70,19 @@ export async function processCheckinReward({
   const endUpdateStudentReward = 
     measure("UPDATE_STUDENT_REWARD");
 
-  await updateStudentReward({
+  const saved = savedReward || await updateStudentReward({
     db,
     studentId,
     studentData,
-    rewardId: rewardResult.id,
+    rewardId: proposal.result.reward.id,
     rewardRarity:
-      rewardResult.rarity,
-    extras
+      proposal.result.reward.rarity,
+    extras,
+    attendanceId,
+    reward: proposal.result.reward,
   });
+
+  const rewardResult = { ...saved.reward, emoji: saved.reward.icon };
 
   endUpdateStudentReward.end();
 
@@ -85,10 +93,7 @@ export async function processCheckinReward({
   const endCheckNewItem = 
     measure("CHECK_NEW_ITEM");
 
-  const isNewItem =
-    !inventory[
-      rewardResult.id
-    ]
+  const isNewItem = saved.isNewItem;
 
   endCheckNewItem.end();
 
@@ -99,10 +104,11 @@ export async function processCheckinReward({
   const endSyncInventory = 
     measure("SYNC_INVENTORY_CLIENT");
 
-  syncInventoryToClient({
-    studentData,
-    rewardId: rewardResult.id
-  });
+  studentData.inventory = saved.inventory;
+  studentData.rewardStats = saved.rewardStats;
+  if (attendanceId) {
+    studentData.rewardReceipt = { attendanceId, reward: saved.reward, isNewItem };
+  }
 
   endSyncInventory.end();
 

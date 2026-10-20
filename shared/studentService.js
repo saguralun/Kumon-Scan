@@ -1,5 +1,5 @@
 import {
-	doc, getDoc, updateDoc, getDocs, documentId,
+	doc, getDoc, getDocFromServer, updateDoc, getDocs, documentId,
 	query, collection, orderBy, where,
 	startAt, endAt, limit, startAfter,
 	serverTimestamp
@@ -14,7 +14,7 @@ import {
 	logError
 } from "/shared/index.js";
 
-export async function getActiveStudent(db, studentId) {
+export async function getActiveStudent(db, studentId, { fromServer = false } = {}) {
 
 	const tag = "getActiveStudent";
 
@@ -28,7 +28,7 @@ export async function getActiveStudent(db, studentId) {
 		);
 
 		const snap = 
-			await getDoc(studentRef);
+			await (fromServer ? getDocFromServer : getDoc)(studentRef);
 
 		if (!snap.exists()) {
 
@@ -71,7 +71,7 @@ export async function getActiveStudent(db, studentId) {
 
 	} catch (err) {
 		
-		await logError(
+		void logError(
 			db, 
 			{
 				tag: "getActiveStudent",
@@ -79,7 +79,7 @@ export async function getActiveStudent(db, studentId) {
 				error: err,
 				extra: { studentId }
 			}
-		);
+		).catch(console.error);
 
 		debugLog(
 			"getActiveStudent", 
@@ -89,6 +89,7 @@ export async function getActiveStudent(db, studentId) {
 
 		return { 
 			status: "error", 
+			error: err,
 			message: "Failed to load student", 
 			details: err?.message || String(err) 
 		};
@@ -97,6 +98,26 @@ export async function getActiveStudent(db, studentId) {
 }
 
 // อัพเดท WeeklyPlan สำหรับเด็กที่ checkin สำเร็จ ต้องมี realslot
+export function buildWeeklyPlanAfterCheckin(plan, checkInText) {
+  const currentMinutes = parseTimeToMinutes(checkInText);
+  const oldMinutes = plan
+    ? parseTimeToMinutes(plan.timeAverage || plan.timeSlot)
+    : currentMinutes;
+  const average = plan
+    ? Math.round((oldMinutes * 3 + currentMinutes) / 4)
+    : currentMinutes;
+
+  return {
+    ...(plan || {}),
+    timeSlot: minutesToTime(Math.floor(average / 30) * 30),
+    timeAverage: minutesToTime(average),
+    planStrength: Math.min((plan?.planStrength || 0) + 2, 10),
+    missStreak: 0,
+    zeroStrengthWeeks: 0,
+    totalSessions: (plan?.totalSessions || 0) + 1,
+  };
+}
+
 export async function studentUpdateWeeklyPlan({
 	db,
 	studentId,

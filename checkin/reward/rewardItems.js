@@ -1,3 +1,5 @@
+import { validateRewardItem } from "./rewardConfigValidator.js";
+
 let rewardItems = [];
 
 export function setRewardItems(items = []) {
@@ -13,6 +15,7 @@ export function getRewardItems() {
 export function validateRewardItems(items) {
 
   for (const item of items) {
+    validateRewardItem(item);
 
     if (!item.id)
       throw new Error("MISSING_ID");

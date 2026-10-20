@@ -34,9 +34,8 @@ export function formatToSlotKey(dateObj) {
 }
 
 // ⏱️ 4. คำนวณนาทีที่ผ่านไปจาก Timestamp (เปรียบเทียบกับ "ตอนนี้")
-export function getDiffMinutes(timestamp) {
+export function getDiffMinutes(timestamp, now = getNow()) {
     if (!timestamp) return 0;
-    const now = getNow();
     let date;
 
     if (typeof timestamp.toDate === "function") date = timestamp.toDate();

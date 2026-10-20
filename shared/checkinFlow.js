@@ -4,10 +4,6 @@ import {
 } from "/shared/index.js";
 
 import {
-  studentUpdateWeeklyPlan
-} from "/shared/studentService.js";
-
-import {
   escapeHtml
 } from "/shared/textUtils.js";
 
@@ -115,6 +111,7 @@ export function handleAttendanceResult({
       return false;
 
     case "created":
+    case "reward_pending":
       return true;
   }
 }
@@ -140,12 +137,7 @@ export async function processCheckinSuccess({
     "weeklyPlan"
   );
 
-  await studentUpdateWeeklyPlan({
-    db,
-    studentId,
-    studentData,
-    checkInText: timeText,
-  });
+  // Attendance, schedule and weekly plan are committed together by processAttendance.
 
   endUpdateWeeklyPlan.end();
 

@@ -1934,3 +1934,5 @@ h2 {
   }
 
 }
+.data-status { font-size: 11px; color: #63726c; line-height: 1.4; }
+button:disabled { opacity: .6; cursor: wait; }

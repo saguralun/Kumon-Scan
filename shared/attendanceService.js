@@ -1,7 +1,8 @@
 import {
 	doc,
   getDoc,
-	setDoc,
+  getDocFromServer,
+  Timestamp,
 	serverTimestamp,
 	collection,
 	where,
@@ -23,6 +24,7 @@ import {
 } from "/shared/index.js";
 
 import * as progressUI from "../checkin/ui/progressUI.js";
+import { buildWeeklyPlanAfterCheckin } from "./studentService.js";
 
 // 👉 function กลางสำหรับ check-in
 export async function createAttendance({
@@ -33,48 +35,11 @@ export async function createAttendance({
 	nowtime = new Date()
 }) {
 
-	const weekday = 
-    getTodayWeekday(nowtime);
-	const checkInServerTime = 
-    serverTimestamp();
-    
-	const timeText = 
-    formatFirestoreTime(nowtime);
-	const realSlot = 
-    formatToSlotKey(nowtime);
-
-	const attendanceId = 
-    `${studentId}_${today}`;
-	const attendanceRef = 
-    doc(
-      db, 
-      "attendance", 
-      attendanceId
-    );
-
-  const writeTimer =
-    measure("SET_ATTENDANCE_DOC");
-
-	await setDoc(attendanceRef, {
-		studentId: studentId,
-		firstName: studentData.firstName,
-		lastName: studentData.lastName,
-		nickname: studentData.nickname,
-		subject: studentData.subject,
-		date: today,
-		weekday: weekday,
-		slotKey: realSlot,
-		checkInTime: checkInServerTime,
-		status: "active"
-	});
-
-  writeTimer.end();
-
-	return {
-		attendanceId,
-		timeText,
-		realSlot
-	};
+  const result = await createAttendanceAndCheckinSchedule({
+    db, studentId, studentData, today, nowtime, rewardEligible: false,
+  });
+  if (result.status !== "created") throw new Error("ATTENDANCE_ALREADY_EXISTS");
+  return result.attendance;
 }
 
 async function createAttendanceAndCheckinSchedule({
@@ -82,7 +47,13 @@ async function createAttendanceAndCheckinSchedule({
 	studentId,
 	studentData,
 	today,
-	nowtime = new Date()
+	nowtime = new Date(),
+  scheduleData = null,
+  plannedSlot = null,
+  rewardEligible = true,
+  prepareReward = null,
+  requestId = null,
+  preserveRequestTime = false,
 }) {
 	const tag =
 		"createAttendanceAndCheckinSchedule";
@@ -114,15 +85,21 @@ async function createAttendanceAndCheckinSchedule({
 	let invalidCheckinDataLog = null;
 
 	try {
-		await runTransaction(db, async (tx) => {
+    const result = await runTransaction(db, async (tx) => {
 			const attendanceSnap =
         await tx.get(attendanceRef);
 
 			if (attendanceSnap.exists()) {
-				throw new Error(
-					"ATTENDANCE_ALREADY_EXISTS"
-				);
+        return { status: attendanceSnap.data().status, data: attendanceSnap.data() };
 			}
+
+      const studentRef = doc(db, "students", studentId);
+      const studentSnap = await tx.get(studentRef);
+      if (!studentSnap.exists() || studentSnap.data().active !== true) {
+        throw new Error("STUDENT_NOT_ACTIVE");
+      }
+      const freshStudent = studentSnap.data();
+      const weeklyPlan = buildWeeklyPlanAfterCheckin(freshStudent.weeklyPlans?.[weekday], timeText);
 
 			moveResult =
         await moveToCheckinScheduleInTransaction({
@@ -130,7 +107,9 @@ async function createAttendanceAndCheckinSchedule({
           tx,
           today,
           studentId,
-          studentData,
+          studentData: freshStudent,
+          scheduleData,
+          plannedSlot,
           weekday,
           realSlot,
           timeText,
@@ -139,39 +118,75 @@ async function createAttendanceAndCheckinSchedule({
 			invalidCheckinDataLog =
         moveResult.invalidCheckinDataLog;
 
+      let preparedReward = null;
+      if (rewardEligible && prepareReward) {
+        try {
+          preparedReward = prepareReward({
+            studentData: freshStudent, attendanceId, extras: moveResult.extras || [],
+          });
+        } catch (error) {
+          // A reward configuration problem must not prevent attendance being saved.
+          console.warn("Reward remains pending after check-in", error);
+        }
+      }
+      const rewardUpdates = preparedReward?.updates || {};
+      tx.update(studentRef, {
+        ...rewardUpdates,
+        [`weeklyPlans.${weekday}`]: weeklyPlan,
+        lastAttendanceDate: freshStudent.lastAttendanceDate > today ? freshStudent.lastAttendanceDate : today,
+      });
 			tx.set(attendanceRef, {
 				studentId: studentId,
-				firstName: studentData.firstName,
-				lastName: studentData.lastName,
-				nickname: studentData.nickname,
-				subject: studentData.subject,
+				firstName: freshStudent.firstName || "",
+				lastName: freshStudent.lastName || "",
+				nickname: freshStudent.nickname || "",
+				subject: freshStudent.subject,
 				date: today,
 				weekday: weekday,
 				slotKey: realSlot,
-				checkInTime: checkInServerTime,
-				status: "active"
+				checkInTime: preserveRequestTime ? Timestamp.fromDate(nowtime) : checkInServerTime,
+        ...(preserveRequestTime ? { recordedAt: checkInServerTime } : {}),
+        ...(requestId ? { requestId } : {}),
+				status: "active",
+        rewardEligible,
+        extras: moveResult.extras || [],
+        rewardState: !rewardEligible ? "none" : preparedReward ? "granted" : "pending",
+        ...(preparedReward ? { rewardReceipt: {
+          reward: preparedReward.result.reward, isNewItem: preparedReward.result.isNewItem,
+        } } : {}),
 			});
+      return { status: "created", freshStudent, weeklyPlan, rewardUpdates, savedReward: preparedReward?.result || null };
 		});
 
+    if (result.status !== "created") return result;
+    Object.assign(studentData, result.freshStudent, result.rewardUpdates, {
+      weeklyPlans: { ...result.freshStudent.weeklyPlans, [weekday]: result.weeklyPlan },
+      lastAttendanceDate: result.freshStudent.lastAttendanceDate > today ? result.freshStudent.lastAttendanceDate : today,
+    });
+
 		if (invalidCheckinDataLog) {
-			await logError(db, {
+			void logError(db, {
 				tag,
 				message: "INVALID_CHECKIN_DATA",
 				extra: invalidCheckinDataLog,
-			});
+			}).catch(console.error);
 		}
 
 		return {
+      status: "created",
+      savedReward: result.savedReward,
+      attendance: {
 			attendanceId,
 			timeText,
 			realSlot,
 			extras:
         moveResult.extras || []
+      }
 		};
 
 	} catch (error) {
 
-		await logError(db, {
+		void logError(db, {
 			tag,
 			message:
         "CREATE_ATTENDANCE_AND_CHECKIN_SCHEDULE_FAIL",
@@ -184,7 +199,7 @@ async function createAttendanceAndCheckinSchedule({
 				attendanceId,
 				realSlot,
 			},
-		});
+		}).catch(console.error);
 
 		throw error;
 
@@ -198,7 +213,8 @@ async function createAttendanceAndCheckinSchedule({
 async function getAttendanceStatus(
   db,
   studentId,
-  date
+  date,
+  fromServer = false,
 ){
   const tag =
     "getAttendanceStatus";
@@ -216,7 +232,7 @@ async function getAttendanceStatus(
       );
 
     const snap =
-      await getDoc(
+      await (fromServer ? getDocFromServer : getDoc)(
         attendanceRef
       );
 
@@ -256,7 +272,7 @@ async function getAttendanceStatus(
 
   }catch(error){
 
-    await logError(db,{
+    void logError(db,{
       tag,
       message:
         "failed to get attendance status",
@@ -265,7 +281,7 @@ async function getAttendanceStatus(
         studentId,
         date
       }
-    });
+    }).catch(console.error);
 
     return {
       status:"error",
@@ -279,10 +295,22 @@ export async function processAttendance({
   studentId,
   studentData,
   today,
-  nowtime = new Date()
+  nowtime = new Date(),
+  scheduleData = null,
+  plannedSlot = null,
+  rewardEligible = true,
+  autoCheckoutPrevious = true,
+  readDeadline = null,
+  onWriteStart = () => {},
+  prepareReward = null,
+  readConnection = null,
+  requestId = null,
+  preserveRequestTime = false,
+  recoverExisting = false,
+  silent = false,
 }) {
 
-  progressUI.updateProgress(
+  if (!silent) progressUI.updateProgress(
     "attendance"
   );
 
@@ -290,12 +318,43 @@ export async function processAttendance({
   const endCheckAttendance = 
     measure("CHECK_ATTENDANCE");
 
-  const attendanceResult = 
-    await getAttendanceStatus(
-      db, 
-      studentId, 
-      today
-    );
+  async function startWrite() {
+    readDeadline?.assertActive();
+    await (readDeadline ? readDeadline.run(onWriteStart, "before-save") : onWriteStart());
+    readDeadline?.assertActive();
+  }
+
+  if (!autoCheckoutPrevious) {
+    await startWrite();
+    return createAttendanceAndCheckinSchedule({
+      db, studentId, studentData, today, nowtime, scheduleData, plannedSlot, rewardEligible, prepareReward, requestId, preserveRequestTime,
+    });
+  }
+
+  const readStatus = () => getAttendanceStatus(db, studentId, today, recoverExisting);
+  const readOptions = { canRetry: () => !readDeadline || readDeadline.isActive() };
+  const loadStatus = () => readConnection ? readConnection.runRead(readStatus, readOptions) : readStatus();
+  const attendanceResult = await (readDeadline
+    ? readDeadline.run(loadStatus, "attendance-status") : loadStatus());
+
+  const existing = attendanceResult.data;
+  if (requestId && existing?.requestId === requestId) {
+    return restoreQueuedAttendance(existing, studentData, studentId, today);
+  }
+  if (rewardEligible && existing?.rewardState !== "granted" && existing?.rewardEligible === true &&
+      ["active", "completed"].includes(existing.status) &&
+      studentData.rewardReceipt?.attendanceId !== `${studentId}_${today}`) {
+    return {
+      status: "reward_pending",
+      data: existing,
+      attendance: {
+        attendanceId: `${studentId}_${today}`,
+        timeText: formatFirestoreTime(existing.checkInTime),
+        realSlot: existing.slotKey,
+        extras: existing.extras || [],
+      },
+    };
+  }
       
   switch (attendanceResult.status) {
 
@@ -322,6 +381,7 @@ export async function processAttendance({
   }
 
   endCheckAttendance.end();
+  if (studentData.active !== true) throw new Error("STUDENT_NOT_ACTIVE");
 
   const queryTimer =
     measure("AUTO_CHECKOUT_QUERY");
@@ -335,8 +395,10 @@ export async function processAttendance({
       where("lastName", "==", studentData.lastName),
     );
 
-  const activeAttendanceSnap =
-    await getDocs(activeQuery);
+  const readPrevious = () => getDocs(activeQuery);
+  const loadPrevious = () => readConnection ? readConnection.runRead(readPrevious, readOptions) : readPrevious();
+  const activeAttendanceSnap = await (readDeadline
+    ? readDeadline.run(loadPrevious, "previous-attendance") : loadPrevious());
 
   queryTimer.end();
 
@@ -348,7 +410,8 @@ export async function processAttendance({
   const endAutoCheckout = 
     measure("AUTO_CHECKOUT");
 
-  const now = new Date();
+  const now = preserveRequestTime ? nowtime : new Date();
+  await startWrite();
 
   if (!activeAttendanceSnap.empty) {
 
@@ -360,6 +423,9 @@ export async function processAttendance({
 
     const attData =
       docSnap.data();
+    if (preserveRequestTime && attData.checkInTime?.toDate?.() > now) {
+      throw new Error("CHECKIN_ORDER_REQUIRES_REVIEW");
+    }
     
     const diffMinutes =
       getDiffMinutes(
@@ -376,7 +442,7 @@ export async function processAttendance({
     );
 
     // Step 5: Auto Checkout
-    progressUI.updateProgress(
+    if (!silent) progressUI.updateProgress(
       "autoCheckout"
     );
 
@@ -388,7 +454,8 @@ export async function processAttendance({
       attData,
       totalMinutes:
         diffMinutes,
-      autoCheckout: true
+      autoCheckout: true,
+      requestedAt: preserveRequestTime ? nowtime : null,
     });
 
     debugLog(
@@ -403,7 +470,7 @@ export async function processAttendance({
   endAutoCheckout.end();
 
   // Step 6: บันทึก Attendance ใหม่
-  progressUI.updateProgress(
+  if (!silent) progressUI.updateProgress(
     "saveAttendance"
   );
 
@@ -416,24 +483,45 @@ export async function processAttendance({
     studentData,
     today,
     nowtime,
+    scheduleData,
+    plannedSlot,
+    rewardEligible,
+    prepareReward,
+    requestId,
+    preserveRequestTime,
   });
 
   endCreateAttendance.end();
 
+  if (requestId && newAttendance.data?.requestId === requestId) {
+    return restoreQueuedAttendance(newAttendance.data, studentData, studentId, today);
+  }
+  return newAttendance;
+}
+
+function restoreQueuedAttendance(data, studentData, studentId, today) {
   return {
-    status:"created",
-    attendance:newAttendance
+    status: "created", restored: true,
+    attendance: {
+      attendanceId: `${studentId}_${today}`, timeText: formatFirestoreTime(data.checkInTime),
+      realSlot: data.slotKey, extras: data.extras || [],
+    },
+    savedReward: data.rewardState === "granted" && data.rewardReceipt ? {
+      ...data.rewardReceipt, inventory: studentData.inventory || {},
+      rewardStats: studentData.rewardStats || {}, alreadyClaimed: true,
+    } : null,
   };
 }
 
 function buildAttendanceCompletionPayload({
   totalMinutes,
-  autoCheckout = false
+  autoCheckout = false,
+  requestedAt = null,
 }) {
   const payload = {
     status: "completed",
     checkOutTime:
-      serverTimestamp(),
+      requestedAt ? Timestamp.fromDate(requestedAt) : serverTimestamp(),
     totalMinutes,
   };
 
@@ -451,7 +539,8 @@ async function completeAttendanceAndSchedule({
   today,
   attData,
   totalMinutes,
-  autoCheckout = false
+  autoCheckout = false,
+  requestedAt = null,
 }) {
   const tag =
     "completeAttendanceAndSchedule";
@@ -466,16 +555,27 @@ async function completeAttendanceAndSchedule({
   const payload =
     buildAttendanceCompletionPayload({
       totalMinutes,
-      autoCheckout
+      autoCheckout,
+      requestedAt,
     });
 
   try {
     await runTransaction(db, async (tx) => {
+      const attendanceSnap = await tx.get(attendanceRef);
+      if (!attendanceSnap.exists()) throw new Error("ATTENDANCE_NOT_FOUND");
+
+      const currentAttendance = attendanceSnap.data();
+      // Retrying an acknowledged checkout must not change its original times.
+      if (currentAttendance.status === "completed") return;
+      if (currentAttendance.status !== "active") {
+        throw new Error("ATTENDANCE_NOT_ACTIVE");
+      }
+
       await moveToCompletedScheduleInTransaction({
         db,
         tx,
         today,
-        attData
+        attData: currentAttendance
       });
 
       tx.update(
@@ -484,12 +584,14 @@ async function completeAttendanceAndSchedule({
       );
     });
   } catch (error) {
+    if (isRetryableCheckoutError(error)) throw error;
+
     if (
       error?.message?.startsWith(
         "CHECKIN_DATA_INVALID"
       )
     ) {
-      await logError(db, {
+      void logError(db, {
         tag: "CHECKIN_DATA_CORRUPTED",
         message: error.message,
         error,
@@ -498,10 +600,10 @@ async function completeAttendanceAndSchedule({
           attendanceId,
           attendance: attData,
         },
-      });
+      }).catch(console.error);
     }
 
-    await logError(db, {
+    void logError(db, {
       tag,
       message:
         "COMPLETE_ATTENDANCE_AND_SCHEDULE_FAIL",
@@ -513,27 +615,41 @@ async function completeAttendanceAndSchedule({
         autoCheckout,
         attendance: attData,
       },
-    });
+    }).catch(console.error);
 
     throw error;
   }
 }
 
+export function isRetryableCheckoutError(error) {
+  const code = String(error?.code || "").replace(/^firestore\//, "");
+  return [
+    "unavailable",
+    "deadline-exceeded",
+    "aborted",
+    "internal",
+    "resource-exhausted",
+    "unknown",
+    "network-request-failed",
+  ].includes(code);
+}
+
 export async function checkoutAttendance({
   db,
-  attendanceData
+  attendanceData,
+  nowtime = new Date()
 }) {
 
   const now =
-    new Date();
+    nowtime;
 
   const checkIn =
     attendanceData.checkInTime.toDate();
 
   const totalMinutes =
-    Math.floor(
+    Math.max(0, Math.floor(
       (now - checkIn) / 60000
-    );
+    ));
 
   await completeAttendanceAndSchedule({
     db,
@@ -543,7 +659,8 @@ export async function checkoutAttendance({
       attendanceData.date,
     attData:
       attendanceData,
-    totalMinutes
+    totalMinutes,
+    requestedAt: nowtime,
   });
 
   return {

@@ -2,7 +2,6 @@ import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebas
 import {
   getFirestore,
   enableNetwork,
-  disableNetwork,
   collection,
   getDocs,
   doc,
@@ -23,8 +22,8 @@ import {
   logError,
   debugLog,
   measure,
-  checkVersionAndReload,
   getTodayThai,
+  getNow,
   getTodayWeekday,
   formatToSlotKey,
   moveToCheckinSchedule,
@@ -48,22 +47,19 @@ import {
 } from "../modules/dailyBuild.js";
 
 import {
-  loadTodaySettingCache,
-  saveTodaySettingCache,
   saveStudentSession,
   hasStudentSession,
   clearAllCache,
-  loadSystemConfig, 
-  saveSystemConfig
 } from "../modules/storage.js";
 
 import {
   checkTodayAndTime,
 } from "../modules/settings.js";
 
-import {
-  setRarities
-} from "../reward/rewardRarity.js";
+import { createCheckinConfigRefresher } from "../modules/configRefresh.js";
+import { createReadDeadline } from "/shared/readDeadline.js";
+import { createCheckinConnection } from "../modules/connection.js";
+import { createCheckinQueue, waitForCheckinJob } from "../modules/checkinQueue.js";
 
 import { $, qs } from "../ui/dom.js";
 import * as progressUI from "../ui/progressUI.js";
@@ -97,6 +93,19 @@ let adminTimer;
 let animationInterval = null;
 let checkinSuccess = false;
 let popupStage = "reward";
+let checkinStartupStarted = false;
+let checkinPageActive = false;
+let checkinStartupReady = false;
+let checkinStartupTask = null;
+const connection = createCheckinConnection({ db });
+const configRefresher = createCheckinConfigRefresher({
+  db,
+  readConfig: read => connection.runRead(read),
+  onConfig(config, setting) { cachedTodaySetting = setting; },
+});
+const checkinJobs = createCheckinQueue({ db, connection,
+  ensureReady: ensureCheckinStartup, onChange: renderCheckinJobs,
+});
 
 window.submitID = async function () {
 
@@ -106,10 +115,17 @@ window.submitID = async function () {
   const tag = "submitID";
   const studentId = currentInput;
   const today = getTodayThai();
+  const requestedAt = getNow();
+
+  let attendanceSaved = false;
+  let keepStartupOverlay = false;
+  let queuedId = null;
 
   checkinSuccess = false;
 
   if (DEV_MODE && isMockUser(currentInput)) {
+    const finishDevWrite = await connection.beginWrite();
+    try {
     console.log("🚧 DEV MODE: skip server");
 
     setUIProcessing(true);
@@ -196,6 +212,9 @@ window.submitID = async function () {
     checkinSuccess = true;
 
     return; // 🔥 สำคัญมาก ตัด flow จริง
+    } finally {
+      finishDevWrite();
+    }
 
   }
 
@@ -215,6 +234,7 @@ window.submitID = async function () {
     setUIProcessing(true);
 
     // Step 1: ตรวจสอบเวลา
+    const readDeadline = createReadDeadline();
     progressUI.updateProgress(
       "checkTime"
     );
@@ -222,8 +242,21 @@ window.submitID = async function () {
     const endCheckTodayTime =
       measure("CHECK_TODAY_TIME");
 
-    const todaySetting = 
-      await checkTodayAndTime();
+    let setting;
+    try {
+      await readDeadline.run(() => ensureCheckinStartup(), "startup");
+      setting = await readDeadline.run(() => configRefresher.getTodaySetting(), "config");
+    } catch (error) {
+      console.warn("Check-in config unavailable", error);
+      keepStartupOverlay = ["config/version-mismatch", "config/clock-invalid"].includes(error.code);
+      if (error.code === "config/clock-invalid") {
+        statusUI.showError("วันที่หรือเวลาเครื่องไม่ถูกต้อง<br>กรุณาตรวจสอบการตั้งค่า");
+      } else if (!keepStartupOverlay) {
+        statusUI.showError("ยังโหลดข้อมูลวันเรียนไม่สำเร็จ<br>กรุณาตรวจสอบอินเทอร์เน็ตแล้วลองใหม่");
+      }
+      return;
+    }
+    const todaySetting = await checkTodayAndTime(setting);
 
     endCheckTodayTime.end();
 
@@ -238,9 +271,9 @@ window.submitID = async function () {
     );
 
     const dataResult = 
-      await getActiveStudent(db, 
-        studentId
-      );
+      await readDeadline.run(() => connection.runRead(() => getActiveStudent(db, studentId), {
+        canRetry: () => readDeadline.isActive(),
+      }), "student");
 
     endGetStudentTime.end();  
 
@@ -259,13 +292,29 @@ window.submitID = async function () {
 
     debugLog(tag, "GET_STUDENT_RESULT", dataResult);
 
-    const attendanceResult =
-      await processAttendance({
-        db,
-        studentId,
-        studentData,
-        today
-      });
+    readDeadline.assertActive();
+    const submitted = checkinJobs.submit({ studentId, studentData, today, requestedAt });
+    queuedId = submitted.job.id;
+    if (submitted.existing) {
+      statusUI.showStatus(submitted.job.status === "done"
+        ? "มีผลเช็กอินแล้ว ดูได้ในรายการด้านล่าง"
+        : "มีรายการรอยืนยันอยู่แล้ว ไม่ต้องส่งซ้ำ", "#946200");
+      return;
+    }
+    checkinJobs.resume();
+    progressUI.updateProgress("saveAttendance");
+    const outcome = await waitForCheckinJob(submitted.promise);
+    if (outcome.pending) {
+      stopRandomAnimation();
+      statusUI.showStatus("รับรายการไว้แล้ว กำลังรอยืนยัน<br>เด็กคนถัดไปเช็กอินต่อได้", "#946200");
+      return;
+    }
+    if (!outcome.value.attendanceResult) {
+      statusUI.showStatus("ยืนยันรายการแล้ว ดูผลในรายการด้านล่าง", "#267744");
+      return;
+    }
+    const { attendanceResult } = outcome.value;
+    studentData = outcome.value.studentData;
 
     const canContinue =
       handleAttendanceResult({
@@ -274,6 +323,8 @@ window.submitID = async function () {
         statusUI,
         audio
       });
+
+    attendanceSaved = ["created", "reward_pending"].includes(attendanceResult.status);
 
     if (!canContinue) {
       return;
@@ -317,6 +368,8 @@ window.submitID = async function () {
       studentId,
       studentData,
       extras,
+      attendanceId: attendanceResult.attendance.attendanceId,
+      savedReward: attendanceResult.savedReward,
       stopRandomAnimation,
     });
 
@@ -339,6 +392,7 @@ window.submitID = async function () {
     $("collectionLinkWrapper").style.display = "flex";
 
     saveStudentSession(studentId, studentData);
+    checkinJobs.acknowledge(queuedId);
 
     statusUI.showSuccess(
       `ยินดีต้อนรับ ${escapeHtml(studentData.firstName)} ${escapeHtml(studentData.lastName)} (${escapeHtml(studentData.nickname)})<br>
@@ -350,8 +404,14 @@ window.submitID = async function () {
   } catch (error) {
 
     debugLog(tag, "CATCH_ERROR", error);
-    await logError(db, { tag, message: "Submit button error", error });
-    statusUI.showError("เกิดข้อผิดพลาด กรุณาลองใหม่");
+    void logError(db, { tag, message: "Submit button error", error }).catch(console.error);
+    statusUI.showError(attendanceSaved
+      ? "บันทึกเข้าเรียนแล้ว แต่รางวัลยังไม่สำเร็จ<br>กรุณาสแกนรหัสเดิมอีกครั้งเพื่อรับรางวัล"
+      : queuedId ? "รายการยังอยู่ในคิว กรุณาตรวจสอบรายการด้านล่าง"
+      : error.isOutboxStorageError ? "เก็บคิวในเครื่องไม่ได้ ยังไม่ได้เริ่มบันทึก<br>กรุณาตรวจสอบพื้นที่จัดเก็บของเบราว์เซอร์"
+      : error.isCheckinReadTimeout
+      ? "เชื่อมต่อช้า ยังไม่ได้เริ่มบันทึกเข้าเรียน<br>กรุณาตรวจสอบอินเทอร์เน็ตแล้วลองใหม่"
+      : "เกิดข้อผิดพลาด กรุณาลองใหม่");
     console.warn("Reward fail แต่ไม่กระทบระบบ", error);
 
   } finally {
@@ -359,139 +419,76 @@ window.submitID = async function () {
     endTotalProcess.end();
 
     if (!checkinSuccess) {
+      stopRandomAnimation();
 
       setUIProcessing(false);
+      if (keepStartupOverlay) $("loadingOverlay").classList.remove("hide");
 
       resetInput();
     }
   }
 };
 
+async function ensureCheckinStartup() {
+  if (checkinStartupReady) return;
+  if (checkinStartupTask) return checkinStartupTask;
+  // Keep one initialization running after a UI timeout; scans cannot bypass it.
+  checkinStartupTask = (async () => {
+    const config = await configRefresher.refresh();
+    const finishStartupWrite = await connection.beginWrite();
+    try {
+      if (!await verifyClientClock(db, config)) {
+        throw Object.assign(new Error("CLIENT_CLOCK_INVALID"), { code: "config/clock-invalid" });
+      }
+      const scheduleBuildResult = await ensureDailyScheduleBuilt(db, config.lastDailyBuildDate);
+      if (scheduleBuildResult?.status === "failed") {
+        statusUI.showError(
+          "Schedule build failed. Please refresh when the network is stable.",
+          "orange"
+        );
+      }
+      checkinStartupReady = true;
+      queueMicrotask(() => checkinJobs.resume());
+    } finally {
+      finishStartupWrite();
+    }
+  })().finally(() => { checkinStartupTask = null; });
+  return checkinStartupTask;
+}
+
 // หน้าโหลด checkversion กับโหลด storage ตารางวัน เวลา เปิด-ปิด
 window.addEventListener("load", async () => {
-
   let shouldHideOverlay = true;
+  checkinStartupStarted = true;
+  checkinPageActive = document.visibilityState !== "hidden";
 
   try {
-
-    // 1. ตรวจสอบเวอร์ชันก่อน (สำคัญที่สุด)
-    const config = 
-      await checkVersionAndReload(
-        db
-      );
-
-    // เก็บ cache config ทั้งหมด
-    saveSystemConfig(config);
-
-    setRarities(config.rarities);
-
-    console.log("Config =", config);
-    console.log("Weekly =", config.weekly);
-    console.log(config.rarities);
-
-    const ok =
-      await verifyClientClock(
-        db,
-        config
-      );
-
-    if (!ok) {
-
-      shouldHideOverlay = false;
-
-      statusUI.showError(
-        "วันที่หรือเวลาเครื่องไม่ถูกต้อง<br>กรุณาตรวจสอบการตั้งค่า"
-      );
-
-      return;
-    }
-
-    if (!config.ok) {
-      shouldHideOverlay = 
-        false;
-
-      return;
-
-    }
-
-    cachedTodaySetting = 
-      loadTodaySettingCache();
-
-    const today = 
-      getTodayThai();
-
-    // 2. โหลดหา weeklySettings เก็บไว้เป็น storage
-    if (cachedTodaySetting && cachedTodaySetting.cacheDate === today) {
-
-      console.log("⚡ using cachedTodaySetting");
-      console.log("📦 cachedTodaySetting =", cachedTodaySetting);
-
-    } else {
-
-      const todayWeeklySetting =
-        config.weekly?.[getTodayWeekday()];
-
-      if (todayWeeklySetting) {
-
-        cachedTodaySetting = {
-            cacheDate: today,
-            ...todayWeeklySetting,
-        };
-
-        saveTodaySettingCache(cachedTodaySetting);
-        console.log("📦 cachedTodaySetting saved");
-
-      } else {
-
-        // ไม่มีข้อมูล weekly จริง ๆ (เช่น เน็ตสะดุดตอนโหลด config
-        // ทำให้ checkVersionAndReload fail-open มาเป็น weekly: null)
-        // ห้ามสร้าง cache ปลอมที่ไม่มี enabled/open/close เก็บไว้ ไม่งั้น
-        // checkTodayAndTime() จะอ่านว่า "วันนี้ปิด" ทั้งที่จริงแค่โหลดพลาด
-        cachedTodaySetting = null;
-
-        console.warn(
-          "⚠️ ไม่มีข้อมูล weekly ของวันนี้ — ข้ามการ cache ให้ checkTodayAndTime() ขอรีเฟรชแทน"
-        );
-
-      }
-
-    }
-
-    // 3. จัดการเรื่องข้อมูล (หลังบ้าน)
-    const scheduleBuildResult =
-      await ensureDailyScheduleBuilt(
-        db,
-        config.lastDailyBuildDate
-      );
-
-    if (scheduleBuildResult?.status === "failed") {
-      statusUI.showError(
-        "Schedule build failed. Please refresh when the network is stable.",
-        "orange"
-      );
-    }
+    await createReadDeadline().run(() => ensureCheckinStartup(), "startup");
 
   // 4. แสดงผล UI
   } catch (error) {
 
     console.error("Check-in startup failed", error);
+    if (error.code === "config/version-mismatch") {
+      shouldHideOverlay = false;
+      return;
+    }
+    if (error.code === "config/clock-invalid") {
+      shouldHideOverlay = false;
+      statusUI.showError("วันที่หรือเวลาเครื่องไม่ถูกต้อง<br>กรุณาตรวจสอบการตั้งค่า");
+      return;
+    }
 
-    try {
-
-      await logError(db, {
+    void logError(db, {
         tag: "CHECKIN_STARTUP",
         message: "Check-in startup failed",
         error,
-      });
-
-    } catch (logErr) {
-
-      console.error("Startup error logging failed", logErr);
-
-    }
+      }).catch(console.error);
 
     statusUI.showError(
-      "Startup failed. Please refresh and try again.",
+      error.isCheckinReadTimeout
+        ? "การเชื่อมต่อใช้เวลานาน ระบบยังเตรียมข้อมูลอยู่ กรุณาลองอีกครั้ง"
+        : "Startup failed. Please refresh and try again.",
       "orange"
     );
 
@@ -515,6 +512,11 @@ window.addEventListener("online", async () => {
 
     await enableNetwork(db);
     console.log("✅ Firestore reconnect");
+    configRefresher.invalidate();
+    if (checkinStartupStarted && document.visibilityState !== "hidden") {
+      await createReadDeadline().run(() => configRefresher.refresh(), "online-config");
+      checkinJobs.resume();
+    }
 
   } catch (e) {
 
@@ -523,18 +525,9 @@ window.addEventListener("online", async () => {
   }
 });
 
-window.addEventListener("offline", async () => {
+window.addEventListener("offline", () => {
   console.log("📴 Browser offline");
-
-  try {
-
-    await disableNetwork(db);
-
-  } catch (e) {
-
-    console.error(e);
-
-  }
+  configRefresher.invalidate();
 });
 
 function updateOnlineStatus() {
@@ -938,12 +931,28 @@ window.addEventListener(
   updateOnlineStatus
 );
 
-window.addEventListener(
-  "focus",
-  () => {
-    reloadIfDateChanged();
-  }
-);
+function refreshConfigOnActivation() {
+  if (!checkinStartupStarted || document.visibilityState === "hidden" || checkinPageActive) return;
+  checkinPageActive = true;
+  if (reloadIfDateChanged()) return;
+  checkinJobs.resume();
+  void createReadDeadline().run(() => configRefresher.refresh(), "activation-config").catch(error => {
+    console.warn("Could not refresh check-in config on activation", error);
+  });
+}
+
+function markCheckinInactive() {
+  checkinPageActive = false;
+  configRefresher.invalidate();
+}
+
+window.addEventListener("focus", refreshConfigOnActivation);
+window.addEventListener("blur", markCheckinInactive);
+window.addEventListener("pageshow", event => {
+  if (!event.persisted) return;
+  markCheckinInactive();
+  refreshConfigOnActivation();
+});
 
 document.addEventListener(
   "visibilitychange",
@@ -954,8 +963,9 @@ document.addEventListener(
       "visible"
     ) {
 
-      reloadIfDateChanged();
-
+      refreshConfigOnActivation();
+    } else {
+      markCheckinInactive();
     }
 
   }
@@ -968,3 +978,41 @@ rewardConfirmBtn.addEventListener(
 
 updateOnlineStatus();
 updateCollectionButton();
+renderCheckinJobs();
+
+function renderCheckinJobs() {
+  const container = $("checkinQueue");
+  if (!container) return;
+  try {
+    const jobs = checkinJobs.list();
+    container.replaceChildren();
+    for (const job of jobs) {
+      const row = document.createElement("div");
+      row.className = "checkin-job " + job.status;
+      const text = document.createElement("div");
+      const label = document.createElement("strong");
+      label.textContent = `${job.nickname} (${job.subject})`;
+      const detail = document.createElement("span");
+      const result = job.result;
+      detail.textContent = job.status === "done"
+        ? `${["active", "completed"].includes(result?.status) ? "มีบันทึกแล้ว" : "ยืนยันแล้ว"} ${result?.timeText || ""}${result?.reward ? " · " + result.reward.icon + " " + result.reward.name : ""}${result?.extras?.length ? " · " + result.extras.map(e => e.type + " " + e.level + (e.ws ? " " + e.ws : "")).join(", ") : ""}`
+        : job.status === "failed" ? "ต้องตรวจสอบ · กดลองใหม่ได้" : "รอยืนยันจาก server";
+      text.append(label, detail);
+      row.append(text);
+      if (job.status !== "pending") {
+        const button = document.createElement("button");
+        button.type = "button";
+        button.textContent = job.status === "done" ? "ปิด" : "ลองใหม่";
+        button.addEventListener("click", () => job.status === "done"
+          ? checkinJobs.acknowledge(job.id) : checkinJobs.retry(job.id));
+        row.append(button);
+      }
+      container.append(row);
+    }
+    container.hidden = jobs.length === 0;
+  } catch (error) {
+    container.hidden = false;
+    container.textContent = "เปิดคิวในเครื่องไม่ได้ กรุณาตรวจสอบพื้นที่จัดเก็บของเบราว์เซอร์";
+    console.error(error);
+  }
+}

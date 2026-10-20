@@ -1,27 +1,20 @@
 import {
-  logError,
-  debugLog,
-} from "/shared/index.js";
-
-import {
   loadTodaySettingCache
 } from "../modules/storage.js";
 
 import * as statusUI from "../ui/statusUI.js";
 
 // 🔹 ตรวจสอบวันเวลา เปิด-ปิด ก่อน
-export async function checkTodayAndTime() {
-
-  const todaySetting = loadTodaySettingCache();
+export async function checkTodayAndTime(todaySetting = loadTodaySettingCache()) {
 
 
-  if (!todaySetting) {
-      statusUI.showError("ข้อมูลวันเรียนสูญหาย กรุณารีเฟรช");
+  if (!isValidTodaySetting(todaySetting)) {
+      statusUI.showError("ยังโหลดข้อมูลวันเรียนไม่สำเร็จ กรุณาลองใหม่");
       return false;
   }
 
   //ตรวจสอบว่าวันเปิดไหม
-  if (todaySetting.enabled !== true) {
+  if (todaySetting.enabled === false) {
 
     statusUI.showError("❌ วันนี้ไม่เปิดการเรียนการสอน");
     return false;
@@ -39,6 +32,14 @@ export async function checkTodayAndTime() {
 
   return true; // ผ่านทั้งสองอย่าง
 
+}
+
+export function isValidTodaySetting(setting) {
+  if (!setting || typeof setting.enabled !== "boolean") return false;
+  if (!setting.enabled) return true;
+  const timePattern = /^(?:[01]?\d|2[0-3]):[0-5]\d$/;
+  return typeof setting.open === "string" && typeof setting.close === "string" &&
+    timePattern.test(setting.open) && timePattern.test(setting.close);
 }
 
 // 🔹 ตรวจสอบเวลาอยู่ในช่วงที่เปิด

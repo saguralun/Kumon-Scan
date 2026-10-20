@@ -52,6 +52,7 @@
 </div>
 
 <div id="appVersion"></div>
+<div id="dataStatus" class="data-status" role="status">กำลังเชื่อมต่อ</div>
 <div id="summaryBox"></div>
 <div id="checkoutQueue"></div>
 
@@ -86,6 +87,7 @@ import {
   doc,
   getDocs,
   orderBy,
+  Timestamp,
 } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
 
 import {
@@ -97,11 +99,13 @@ import {
   checkVersionAndReload,
   formatFirestoreTime,
   checkoutAttendance,
+  isRetryableCheckoutError,
   escapeHtml,
 
 } from "/shared/index.js";
 
 import { $ } from "./checkin/ui/dom.js";
+import { createPendingStore } from "/shared/pendingStore.js";
 
 const firebaseConfig = {
   apiKey: "AIzaSyBfJ9F94tdUw6sIY8ffUPV0AKxXWzZig8s",
@@ -133,13 +137,13 @@ const checkoutState = {
 
   queue:
     new Map(),
+
+  confirmed:
+    new Set(),
 };
 
-// checkout สำเร็จแล้ว แต่การ์ดบนจออาจยังไม่ทันหายไปจนกว่า onSnapshot
-// จะอัปเดตกลับมา ถ้าปลด lock ทันทีแล้วมีคนกดรัว ๆ ซ้ำ จะยิง checkout
-// ซ้อนไปอีกรอบบน record ที่จบไปแล้ว (CHECKIN_DATA_INVALID) เลยหน่วงไว้
-// สักพักก่อนปลด lock เฉพาะตอนสำเร็จ ส่วนตอน fail ปลดทันทีให้กดใหม่ได้เลย
-const CHECKOUT_SUCCESS_UNLOCK_DELAY_MS = 5000;
+const CHECKOUT_RETRY_DELAY_MS = 3000;
+const CHECKOUT_MAX_RETRY_DELAY_MS = 30000;
 
 const activityState = {
   checkinQueue: [],
@@ -170,7 +174,9 @@ const subjectIconMap = {
   EFL: "📙", // ส้ม
   TRP: "📗", // เขียว
 };
+const checkoutStore = createPendingStore("checkout");
 
+restorePendingCheckouts();
 startListener();
 bindToggleButtons();
 bindSubjectButtons();
@@ -617,15 +623,19 @@ function renderQueue() {
   // Pending Checkout
   checkoutState.queue
   
-    .forEach((name) => {
+    .forEach((entry, id) => {
 
       entries.push({
+        priority: 1,
         timeMs:
-          Date.now(),
+          entry.startedAt,
 
         html: `
         <div class="checkout-toast checkout-toast-pending">
-          ⏳ ${escapeHtml(name)}
+          <span class="checkout-pending-name">${entry.failed ? "⚠️ บันทึกไม่ได้" : "⏳"} ${escapeHtml(entry.nickname)}</span>
+          ${entry.failed ? `<button class="checkout-retry-btn"
+            onclick="retryCheckout('${escapeHtml(id)}')"
+            aria-label="ลองบันทึกอีกครั้ง ${escapeHtml(entry.nickname)}">ลองใหม่</button>` : ""}
         </div>
       `,
       });
@@ -684,7 +694,7 @@ function renderQueue() {
 
   entries.sort(
     (a, b) =>
-      b.timeMs - a.timeMs
+      (b.priority || 0) - (a.priority || 0) || b.timeMs - a.timeMs
   );
 
   const visibleEntries =
@@ -745,6 +755,18 @@ function addPendingCheckout(
   id,
   nickname
 ) {
+  const snapshot = activeDataAll.find(item => item.id === id);
+  let saved = checkoutStore.get(id);
+  if (!saved) {
+    const { studentId, subject, date, slotKey, firstName, lastName } = snapshot;
+    saved = { version: 1, id, requestId: crypto.randomUUID(), createdAt: Date.now(),
+      nickname, requestedAt: new Date().toISOString(), status: "pending",
+      attendanceData: { id, studentId, subject, date, slotKey, nickname,
+        firstName: firstName || "", lastName: lastName || "",
+        checkInTime: snapshot.checkInTime.toDate().toISOString() },
+    };
+    checkoutStore.put(saved);
+  }
 
   // hide from active list
   checkoutState.pending.add(id);
@@ -752,24 +774,72 @@ function addPendingCheckout(
   // show in checkout queue
   checkoutState.queue.set(
     id,
-    nickname
+    {
+      nickname,
+      startedAt: saved.createdAt,
+      requestedAt: new Date(saved.requestedAt),
+      durable: true,
+      failed: false,
+    }
   );
 
-  renderQueue();
   renderAll();
 
 }
 
-function removePendingCheckout(
-  id
-) {
-
-  checkoutState.pending.delete(id);
-
+function confirmCheckout(id) {
+  try { checkoutStore.remove(id); } catch (error) { console.warn("Could not remove confirmed local checkout", error); }
+  // Keep hiding stale active snapshots until the server confirms removal.
+  checkoutState.confirmed.add(id);
   checkoutState.queue.delete(id);
+  activeDataAll = activeDataAll.filter(item => item.id !== id);
+}
 
-  renderQueue();
+function restorePendingCheckouts() {
+  try {
+    const jobs = checkoutStore.list();
+    const ids = new Set(jobs.map(job => job.id));
+    for (const [id, entry] of checkoutState.queue) {
+      if (entry.durable && !ids.has(id) && !checkoutState.loading.has(id)) confirmCheckout(id);
+    }
+    for (const job of jobs) {
+      if (checkoutState.loading.has(job.id)) continue;
+      const attendanceData = { ...job.attendanceData,
+        checkInTime: Timestamp.fromDate(new Date(job.attendanceData.checkInTime)),
+      };
+      checkoutState.pending.add(job.id);
+      checkoutState.queue.set(job.id, { nickname: job.nickname, durable: true,
+        startedAt: job.createdAt, requestedAt: new Date(job.requestedAt),
+        failed: job.status === "failed", attendanceData,
+      });
+      if (job.status !== "failed") void processCheckout(job.id, attendanceData);
+    }
+    renderAll();
+  } catch (error) { console.error("Could not restore checkout queue", error); }
+}
 
+function reconcileConfirmedCheckouts(snapshot) {
+  if (snapshot.metadata.fromCache || snapshot.metadata.hasPendingWrites) return;
+
+  const activeIds = new Set(snapshot.docs.map(item => item.id));
+  for (const id of checkoutState.confirmed) {
+    if (!activeIds.has(id)) {
+      checkoutState.pending.delete(id);
+      checkoutState.confirmed.delete(id);
+    }
+  }
+}
+
+function waitForCheckoutRetry(delay) {
+  return new Promise(resolve => {
+    const finish = () => {
+      clearTimeout(timer);
+      window.removeEventListener("online", finish);
+      resolve();
+    };
+    const timer = setTimeout(finish, delay);
+    window.addEventListener("online", finish, { once: true });
+  });
 }
 
 function addRecentCheckin({
@@ -1319,170 +1389,93 @@ async function switchTab(tab) {
 window.checkout = async function (
   id
 ) {
+  if (checkoutState.loading.has(id) || checkoutState.pending.has(id)) return;
 
+  const snapshot = activeDataAll.find(item => item.id === id);
+  if (!snapshot) return;
+
+  try { addPendingCheckout(id, snapshot.nickname); }
+  catch (error) {
+    alert("เก็บคิวในเครื่องไม่ได้ ยังไม่ได้เริ่ม checkout กรุณาตรวจสอบพื้นที่จัดเก็บของเบราว์เซอร์");
+    return;
+  }
+  await processCheckout(id, snapshot);
+};
+
+window.retryCheckout = async function (id) {
   if (checkoutState.loading.has(id)) return;
 
+  const entry = checkoutState.queue.get(id);
+  if (!entry?.failed) return;
+
+  entry.failed = false;
+  const saved = checkoutStore.get(id);
+  if (saved) checkoutStore.put({ ...saved, status: "pending" });
+  renderAll();
+  await processCheckout(id, entry.attendanceData);
+};
+
+async function processCheckout(id, attendanceData) {
   checkoutState.loading.add(id);
-
-  debugLog(
-    "CHECKOUT",
-    "start",
-    { id }
-  );
-
-  let snapshot;
-  let succeeded = false;
+  const entry = checkoutState.queue.get(id);
+  entry.attendanceData = attendanceData;
+  let retryDelay = CHECKOUT_RETRY_DELAY_MS;
 
   try {
+    while (true) {
+      try {
+        await checkoutAttendance({
+          db,
+          attendanceData,
+          nowtime: entry.requestedAt,
+        });
+        break;
+      } catch (error) {
+        if (!isRetryableCheckoutError(error)) throw error;
 
-    snapshot =
-      activeDataAll.find(
-        (x) => x.id === id
-      );
-
-    if (!snapshot)
-      throw new Error(
-        "snapshot-missing"
-      );
-
-    debugLog(
-      "CHECKOUT",
-      "snapshot found",
-      {
-        studentId:
-          snapshot.studentId,
-        subject:
-          snapshot.subject,
+        debugLog("CHECKOUT", "waiting to retry", { id, code: error.code });
+        await waitForCheckoutRetry(retryDelay);
+        retryDelay = Math.min(retryDelay * 2, CHECKOUT_MAX_RETRY_DELAY_MS);
       }
-    );
+    }
 
-    addPendingCheckout(
-      id,
-      snapshot.nickname
-    );
-
-    await checkoutAttendance({
-      db,
-      attendanceData: snapshot
-    });
-
-    // checkout ผ่าน transaction สำเร็จแล้วจริง ๆ ตรงนี้ ต่อให้ขั้นตอน
-    // แสดงผลข้างล่างพลาด ก็ยังต้องหน่วงก่อนปลด lock (ไม่ใช่ปลดทันที)
-    succeeded = true;
-
-    removePendingCheckout(
-      id
-    );
-
+    confirmCheckout(id);
     addRecentCheckout({
-      nickname: snapshot.nickname,
-      subject: snapshot.subject,
+      nickname: attendanceData.nickname,
+      subject: attendanceData.subject,
       time: new Date(),
     });
-
-    renderAll();
-
-    debugLog(
-      "CHECKOUT",
-      "transaction success",
-      { id }
-    );
-
-    if (
-      currentTab === "completed"
-    ) {
-
-      await loadCompleted();
-
-    }
-
-  } catch (e) {
-    
-    if (e.message === "already-completed") {
-
-      debugLog(
-        "CHECKOUT",
-        "ignore",
-        {
-          id,
-          message:
-            e.message,
-        }
-      );
-
-      removePendingCheckout(
-        id
-      );
-
-      renderAll();
-
-      return;
-
-    }
-    
-    await logError(db, {
+  } catch (error) {
+    entry.failed = true;
+    try {
+      const saved = checkoutStore.get(id);
+      if (saved) checkoutStore.put({ ...saved, status: "failed" });
+    } catch (storageError) { console.error(storageError); }
+    void logError(db, {
       tag: "CHECKOUT",
-      message:
-        e.message ||
-        "checkout failed",
-      error: e,
+      message: error.message || "checkout failed",
+      error,
       extra: {
-        attendanceId:
-          id,
-        studentId:
-          snapshot?.studentId,
-        subject:
-          snapshot?.subject,
-        slotKey:
-          snapshot?.slotKey,
-        stage:
-          "checkout-flow",
+        attendanceId: id,
+        studentId: attendanceData.studentId,
+        subject: attendanceData.subject,
+        slotKey: attendanceData.slotKey,
+        stage: "checkout-flow",
       },
-    });
-
-    removePendingCheckout(
-      id
-    );
-    
-    renderAll();
-
+    }).catch(console.error);
   } finally {
-
-    if (succeeded) {
-
-      // สำเร็จแล้ว หน่วงก่อนปลด lock กันกดรัว ๆ ซ้ำตอนการ์ดยังไม่ทันหาย
-      setTimeout(() => {
-
-        checkoutState.loading.delete(
-          id
-        );
-
-        debugLog(
-          "CHECKOUT",
-          "end (delayed unlock)",
-          { id }
-        );
-
-      }, CHECKOUT_SUCCESS_UNLOCK_DELAY_MS);
-
-    } else {
-
-      // ไม่สำเร็จ ปลด lock ทันที ให้กดใหม่ได้เลยไม่ต้องรอ
-      checkoutState.loading.delete(
-        id
-      );
-
-      debugLog(
-        "CHECKOUT",
-        "end",
-        { id }
-      );
-
-    }
-
+    checkoutState.loading.delete(id);
+    renderAll();
   }
 
-};
+  if (checkoutState.confirmed.has(id) && currentTab === "completed") {
+    try {
+      await loadCompleted();
+    } catch (error) {
+      console.error("Completed list refresh failed", error);
+    }
+  }
+}
 
 function rebuildCheckinQueue() {
 
@@ -1527,7 +1520,9 @@ function startListener() {
   );
 
   unsubscribeListener = 
-    onSnapshot(qAll, (snapshot) => {
+    onSnapshot(qAll, { includeMetadataChanges: true }, (snapshot) => {
+      const dataStatus = $("dataStatus");
+      if (dataStatus) dataStatus.textContent = snapshot.metadata.fromCache ? "ข้อมูลในเครื่อง · รอเชื่อมต่อ" : "ข้อมูลล่าสุดจาก server";
 
       // รอบแรก ไม่ต้องแจ้งเตือน
       if (!listenerInitialized) {
@@ -1588,6 +1583,8 @@ function startListener() {
 
       listenerInitialized = true;
 
+      reconcileConfirmedCheckouts(snapshot);
+
       renderAll();
 
   });
@@ -1613,6 +1610,7 @@ document.addEventListener(
   () => {
 
     if (document.visibilityState === "visible") {
+      restorePendingCheckouts();
 
       if (currentTab === "active") {
         renderAll();
@@ -1620,6 +1618,10 @@ document.addEventListener(
 
     }
 
+});
+window.addEventListener("online", restorePendingCheckouts);
+window.addEventListener("storage", event => {
+  if (event.key?.startsWith(checkoutStore.prefix)) restorePendingCheckouts();
 });
 
 setInterval(() => {
