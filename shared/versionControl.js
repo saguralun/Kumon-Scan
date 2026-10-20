@@ -14,7 +14,7 @@ import { validateRewardConfig } from "../checkin/reward/rewardConfigValidator.js
 
 import { $, qs } from "../checkin/ui/dom.js";
 
-export const APP_VERSION = "6.0.6";
+export const APP_VERSION = "6.0.7";
 
 const EMPTY_VERSION_DATA = {
   serverVersion: null,

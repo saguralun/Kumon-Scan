@@ -168,6 +168,11 @@ let currentSubject = "ME";
 let activeDataAll = [];
 let completedData = [];
 let listenerInitialized = false;
+let completedRequestVersion = 0;
+let completedLoading = false;
+let completedError = false;
+let activeListenerVersion = 0;
+let activeListenerFailed = false;
 
 const subjectIconMap = {
   ME: "📘", // น้ำเงิน
@@ -502,6 +507,15 @@ function renderActiveView(
 function renderCompletedView(
   container
 ) {
+  if (completedLoading) {
+    container.innerHTML = "<p role='status'>กำลังโหลด...</p>";
+    return;
+  }
+  if (completedError) {
+    container.innerHTML = "<div class='empty-state'><p role='status'>โหลดรายการเรียนเสร็จไม่สำเร็จ</p><button type='button' class='retry-load'>ลองใหม่</button></div>";
+    container.querySelector(".retry-load").onclick = () => loadCompleted();
+    return;
+  }
 
   let html = "";
 
@@ -634,7 +648,8 @@ function renderQueue() {
         <div class="checkout-toast checkout-toast-pending">
           <span class="checkout-pending-name">${entry.failed ? "⚠️ บันทึกไม่ได้" : "⏳"} ${escapeHtml(entry.nickname)}</span>
           ${entry.failed ? `<button class="checkout-retry-btn"
-            onclick="retryCheckout('${escapeHtml(id)}')"
+            data-attendance-id="${escapeHtml(id)}"
+            onclick="retryCheckout(this.dataset.attendanceId)"
             aria-label="ลองบันทึกอีกครั้ง ${escapeHtml(entry.nickname)}">ลองใหม่</button>` : ""}
         </div>
       `,
@@ -942,7 +957,8 @@ function createActiveCard({
 
         <button
           class="checkout-btn"
-          onclick="checkout('${escapeHtml(item.id)}')"
+          data-attendance-id="${escapeHtml(item.id)}"
+          onclick="checkout(this.dataset.attendanceId)"
           aria-label="Checkout ${escapeHtml(item.nickname)}"
         >
           <svg
@@ -1206,26 +1222,36 @@ function renderActiveControls() {
 
 // load attendance ที่เป็น completed ของวันนี้
 async function loadCompleted() {
+  const requestVersion = ++completedRequestVersion;
+  const date = currentDate;
+  completedLoading = true;
+  completedError = false;
+  $("dataStatus").textContent = "กำลังโหลด";
+  renderAll();
   const q = query(
     collection(db, "attendance"),
-    where("date", "==", currentDate),
+    where("date", "==", date),
     where("status", "==", "completed"),
     orderBy("checkOutTime", "desc"),
   );
 
-  const snapshot = 
-    await getDocs(q);
-
-  completedData = [];
-
-  snapshot.forEach((docSnap) => {
-    completedData.push({
-      id: docSnap.id,
-      ...docSnap.data(),
-    });
-  });
-
-  renderAll();
+  try {
+    const snapshot = await getDocs(q);
+    if (requestVersion !== completedRequestVersion || date !== currentDate || currentTab !== "completed") return;
+    completedData = snapshot.docs.map(docSnap => ({ id: docSnap.id, ...docSnap.data() }));
+    $("dataStatus").textContent = snapshot.metadata?.fromCache ? "ข้อมูลในเครื่อง · รอเชื่อมต่อ" : "ข้อมูลล่าสุดจาก server";
+  } catch (error) {
+    if (requestVersion === completedRequestVersion && date === currentDate) {
+      completedError = true;
+      $("dataStatus").textContent = "โหลดรายการไม่สำเร็จ";
+      console.error("Completed list read failed", error);
+    }
+  } finally {
+    if (requestVersion === completedRequestVersion) {
+      completedLoading = false;
+      renderAll();
+    }
+  }
 }
 
 function updateToggleSlider(
@@ -1263,24 +1289,6 @@ function bindToggleButtons() {
           btn.dataset.tab;
 
         await switchTab(tab);
-
-        document
-          .querySelectorAll(
-            ".toggle-btn"
-          )
-          .forEach((b) => 
-            b.classList.remove(
-              "active"
-            )
-          );
-
-        btn.classList.add(
-          "active"
-        );
-
-        updateToggleSlider(
-          tab
-        );
 
       }
     );
@@ -1345,12 +1353,21 @@ function bindSubjectButtons() {
 }
 
 async function switchTab(tab) {
+  ensureResultDate();
 
   if (tab === currentTab) {
+    if (tab === "completed" && completedError && !completedLoading) await loadCompleted();
+    if (tab === "active" && activeListenerFailed) startListener();
     return;
   }
 
   currentTab = tab;
+  completedRequestVersion++;
+  completedLoading = false;
+  document.querySelectorAll(".toggle-btn").forEach(button => {
+    button.classList.toggle("active", button.dataset.tab === tab);
+  });
+  updateToggleSlider(tab);
 
   const isActive =
     tab === "active";
@@ -1364,6 +1381,7 @@ async function switchTab(tab) {
 
     rebuildCheckinQueue();
     renderQueue();
+    renderAll();
     startListener();
 
     return;
@@ -1376,6 +1394,7 @@ async function switchTab(tab) {
     unsubscribeListener = null;
 
   }
+  activeListenerVersion++;
 
   listenerInitialized = false;
   
@@ -1389,6 +1408,7 @@ async function switchTab(tab) {
 window.checkout = async function (
   id
 ) {
+  if (ensureResultDate()) return;
   if (checkoutState.loading.has(id) || checkoutState.pending.has(id)) return;
 
   const snapshot = activeDataAll.find(item => item.id === id);
@@ -1501,6 +1521,10 @@ function rebuildCheckinQueue() {
 }
 
 function startListener() {
+  const version = ++activeListenerVersion;
+  const date = currentDate;
+  activeListenerFailed = false;
+  $("dataStatus").textContent = "กำลังเชื่อมต่อ";
 
   if (unsubscribeListener) {
 
@@ -1521,6 +1545,7 @@ function startListener() {
 
   unsubscribeListener = 
     onSnapshot(qAll, { includeMetadataChanges: true }, (snapshot) => {
+      if (version !== activeListenerVersion || date !== currentDate) return;
       const dataStatus = $("dataStatus");
       if (dataStatus) dataStatus.textContent = snapshot.metadata.fromCache ? "ข้อมูลในเครื่อง · รอเชื่อมต่อ" : "ข้อมูลล่าสุดจาก server";
 
@@ -1587,6 +1612,12 @@ function startListener() {
 
       renderAll();
 
+  }, error => {
+    if (version !== activeListenerVersion || date !== currentDate) return;
+    activeListenerFailed = true;
+    $("dataStatus").innerHTML = "โหลดข้อมูลไม่สำเร็จ <button type='button' class='retry-load'>ลองใหม่</button>";
+    $("dataStatus").querySelector(".retry-load").onclick = () => startListener();
+    console.error("Active list read failed", error);
   });
 
 }
@@ -1605,11 +1636,34 @@ function renderAll() {
 
 }
 
+function ensureResultDate() {
+  const today = getTodayThai();
+  if (today === currentDate) return false;
+  currentDate = today;
+  completedRequestVersion++;
+  completedLoading = false;
+  completedError = false;
+  completedData = [];
+  activeDataAll = [];
+  activityState.checkinQueue = [];
+  activityState.checkoutQueue = [];
+  listenerInitialized = false;
+  activeListenerVersion++;
+  if (unsubscribeListener) unsubscribeListener();
+  unsubscribeListener = null;
+  $("dataStatus").textContent = "กำลังเชื่อมต่อ";
+  if (currentTab === "active") startListener();
+  else void loadCompleted();
+  renderAll();
+  return true;
+}
+
 document.addEventListener(
   "visibilitychange", 
   () => {
 
     if (document.visibilityState === "visible") {
+      ensureResultDate();
       restorePendingCheckouts();
 
       if (currentTab === "active") {
@@ -1620,11 +1674,13 @@ document.addEventListener(
 
 });
 window.addEventListener("online", restorePendingCheckouts);
+window.addEventListener("pageshow", ensureResultDate);
 window.addEventListener("storage", event => {
   if (event.key?.startsWith(checkoutStore.prefix)) restorePendingCheckouts();
 });
 
 setInterval(() => {
+  ensureResultDate();
   if (currentTab === "active") {
     renderAll();
   }

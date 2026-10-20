@@ -9,7 +9,7 @@ const validReward = { id: 'bear', type: 'animal', name: 'Bear', icon: 'B', rarit
 
 test('invalid rewards do not erase weekly settings or prevent valid rewards from loading', async () => {
   const weekly = { 1: { enabled: true, open: '12:00', close: '20:00' } };
-  const h = createHarness({ 'system/config': { appVersion: '6.0.6', weekly, rarities: [{ id: 'common', weight: 1 }], rewardItems: {
+  const h = createHarness({ 'system/config': { appVersion: '6.0.7', weekly, rarities: [{ id: 'common', weight: 1 }], rewardItems: {
     bear: validReward, broken: { ...validReward, name: '' }, other: { ...validReward, rarity: 'unknown' },
   } } }).load('checkin/reward/rewardConfigValidator.js', 'checkin/reward/rewardItems.js',
     'checkin/reward/rewardRarity.js', 'shared/versionControl.js');

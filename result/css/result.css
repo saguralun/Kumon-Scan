@@ -834,3 +834,5 @@ h2 {
   line-height: 1;
 }
 .data-status { font-size: 11px; color: #65706d; margin: 4px 0 8px; text-align: center; }
+.retry-load { min-height: 44px; padding: 8px 16px; margin: 6px; border: 1px solid #b7cbe0; border-radius: 6px; background: #eaf3fc; color: #19518a; font: inherit; cursor: pointer; }
+.retry-load:focus-visible { outline: 2px solid #1673b7; outline-offset: 2px; }

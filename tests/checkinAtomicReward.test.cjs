@@ -225,6 +225,7 @@ test('the actual Enter handler uses the saved reward and keeps the extra popup b
     updateStudentReward: () => { throw new Error('Enter must not save the reward a second time'); },
   });
   const source = fs.readFileSync(path.join(root, 'checkin/js/checkin.js'), 'utf8');
+  vm.runInContext(source.slice(source.indexOf('function updateCollectionButton()'), source.indexOf('function onRewardConfirm()')), h.context);
   installCheckinQueue(h);
   const start = source.indexOf('window.submitID = async function ()');
   const end = source.indexOf('async function ensureCheckinStartup()', start);

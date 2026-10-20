@@ -25,6 +25,7 @@ import {
 
 import * as progressUI from "../checkin/ui/progressUI.js";
 import { buildWeeklyPlanAfterCheckin } from "./studentService.js";
+import { getStudentDisplayName } from "./textUtils.js";
 
 // 👉 function กลางสำหรับ check-in
 export async function createAttendance({
@@ -139,7 +140,7 @@ async function createAttendanceAndCheckinSchedule({
 				studentId: studentId,
 				firstName: freshStudent.firstName || "",
 				lastName: freshStudent.lastName || "",
-				nickname: freshStudent.nickname || "",
+				nickname: getStudentDisplayName(freshStudent, studentId),
 				subject: freshStudent.subject,
 				date: today,
 				weekday: weekday,
@@ -307,6 +308,7 @@ export async function processAttendance({
   requestId = null,
   preserveRequestTime = false,
   recoverExisting = false,
+  readOnlyExisting = false,
   silent = false,
 }) {
 
@@ -341,7 +343,7 @@ export async function processAttendance({
   if (requestId && existing?.requestId === requestId) {
     return restoreQueuedAttendance(existing, studentData, studentId, today);
   }
-  if (rewardEligible && existing?.rewardState !== "granted" && existing?.rewardEligible === true &&
+  if (!readOnlyExisting && rewardEligible && existing?.rewardState !== "granted" && existing?.rewardEligible === true &&
       ["active", "completed"].includes(existing.status) &&
       studentData.rewardReceipt?.attendanceId !== `${studentId}_${today}`) {
     return {

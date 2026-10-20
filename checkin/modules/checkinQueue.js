@@ -33,6 +33,7 @@ export function createCheckinQueue({ db, connection, ensureReady, onChange, ...o
           db, studentId: job.studentId, studentData, today: job.today,
           nowtime: new Date(job.requestedAt), requestId: job.requestId,
           preserveRequestTime: true, recoverExisting: job.attempts > 0,
+          readOnlyExisting: true,
           readDeadline: deadline, readConnection: connection, silent: true,
           prepareReward: prepareCheckinReward,
           async onWriteStart() {

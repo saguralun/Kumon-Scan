@@ -176,9 +176,13 @@ async function finishBuild(db, ref, today, manifest, invalidStudentIds) {
   });
 }
 
-export async function ensureDailyScheduleBuilt(db, lastDailyBuildDate) {
+export async function ensureDailyScheduleBuilt(db, lastDailyBuildDate, { teachingEnabled = true } = {}) {
   const today = getTodayThai();
   progressUI.updateProgress("checkinSchedule");
+  if (teachingEnabled === false) {
+    progressUI.updateProgress("ready");
+    return { status: "closed", built: false };
+  }
   try {
     const cache = loadBuildStatusCache();
     if (cache?.built && cache.buildVersion === BUILD_VERSION) {

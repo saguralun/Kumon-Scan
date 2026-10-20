@@ -802,4 +802,7 @@ button:active {
 .checkin-job span { margin-top: 3px; font-size: 12px; color: #8b6500; }
 .checkin-job.done span { color: #257044; }
 .checkin-job.failed span { color: #b33838; }
-.checkin-job button { flex: 0 0 auto; padding: 8px; min-height: 36px; border-radius: 6px; border: 1px solid #ccd5df; background: white; font-size: 12px; }
+.checkin-job button { display: inline-flex; align-items: center; justify-content: center; flex: 0 0 auto; padding: 8px; min-width: 44px; min-height: 44px; border-radius: 6px; border: 1px solid #b8c5d2; background: #f3f6f9; color: #263b50; font-size: 12px; line-height: 1; box-shadow: none; transform: none; }
+.checkin-job button:hover { background: #e4edf5; transform: none; }
+.checkin-job button:focus-visible { outline: 2px solid #1673b7; outline-offset: 2px; }
+.checkin-job .dismiss-job { width: 44px; font-size: 26px; }

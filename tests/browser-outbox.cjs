@@ -24,7 +24,7 @@ export const increment = by => ({__increment:by});
 function snap(ref) { const value=load()[ref]; return {id:ref.split('/').pop(),ref,exists:()=>value!==undefined,data:()=>revive(value)}; }
 export const getDoc = async ref => snap(ref), getDocFromServer = getDoc;
 function snapshot(q) { const ref=q.ref||q; let docs=Object.keys(load()).filter(k=>k.startsWith(ref+'/')&&!k.slice(ref.length+1).includes('/')).map(snap).filter(d=>(q.constraints||[]).every(c=>!c.field||(c.op==='=='?field(d.data(),c.field)===c.value:field(d.data(),c.field)>=c.value))); const n=q.constraints?.find(c=>c.limit)?.limit; if(n)docs=docs.slice(0,n); return {docs,size:docs.length,empty:!docs.length,metadata:{fromCache:!!window.__fromCache,hasPendingWrites:false},forEach:fn=>docs.forEach(fn),docChanges:()=>docs.map(doc=>({type:'added',doc}))}; }
-export const getDocs = async q => snapshot(q);
+export const getDocs = async q => { if(window.__failCompletedRead && q.constraints?.some(c=>c.field==='status'&&c.value==='completed')){window.__failCompletedRead=false;throw Object.assign(new Error('simulated read failure'),{code:'unavailable'});}return snapshot(q); };
 export const getCountFromServer = async q => ({data:()=>({count:snapshot(q).size})});
 function notify(){for(const fn of listeners)queueMicrotask(fn);}
 export function onSnapshot(q,options,callback) { if(typeof options==='function')callback=options; let previous=new Set(); const fire=()=>{const s=snapshot(q);const changes=s.docs.filter(d=>!previous.has(d.id)).map(doc=>({type:'added',doc}));previous=new Set(s.docs.map(d=>d.id));s.docChanges=()=>changes;callback(s);};listeners.push(fire);queueMicrotask(fire);return()=>{const i=listeners.indexOf(fire);if(i>=0)listeners.splice(i,1);}; }
@@ -57,7 +57,7 @@ export function writeBatch(){const writes=[];return{update:(ref,value)=>writes.p
       const date = new Date(), today = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Bangkok', year: 'numeric', month: '2-digit', day: '2-digit' }).format(date).replaceAll('-', '');
       const weekly = Object.fromEntries(Array.from({length:7},(_,i)=>[i,{enabled:true,open:'00:00',close:'23:59'}]));
       const db = {
-        'system/config': { appVersion:'6.0.6',serverTime:{__timestampISO:date.toISOString()},weekly,
+        'system/config': { appVersion:'6.0.7',serverTime:{__timestampISO:date.toISOString()},weekly,
           lastDailyBuildDate:today,rarities:[{id:'common',weight:100,badge:'Common'}],
           rewardItems:{test:{type:'shape',name:'Test Star',icon:'*',rarity:'common',releaseDate:'2020-01-01',enabled:true}} },
         ['dailySchedule/'+today]: {buildVersion:2,status:'complete'},
@@ -77,6 +77,13 @@ export function writeBatch(){const writes=[];return{update:(ref,value)=>writes.p
     await enter('101');
     await page.locator('#rewardConfirmBtn').waitFor({ state: 'visible' });
     await page.locator('#rewardConfirmBtn').click();
+    let savedDatabase = await page.evaluate(() => localStorage.getItem('__test-db'));
+    await enter('101');
+    await page.waitForFunction(() => document.querySelector('#status').textContent.includes('กำลังเรียนอยู่'));
+    await page.waitForFunction(() => !document.querySelector('#enterBtn').disabled);
+    assert.equal(await page.evaluate(() => JSON.parse(sessionStorage.getItem('currentStudentId'))), '101');
+    assert.equal(await page.evaluate(() => localStorage.getItem('__test-db')), savedDatabase);
+    assert.equal(await page.locator('#collectionLinkWrapper').isVisible(), true);
     await page.evaluate(() => { window.__holdCommit = true; });
     await enter('102');
     await page.waitForFunction(() => !document.querySelector('#enterBtn').disabled, { timeout: 12000 });
@@ -85,7 +92,7 @@ export function writeBatch(){const writes=[];return{update:(ref,value)=>writes.p
     assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth));
     await page.screenshot({ path: path.join(os.tmpdir(), 'kumon-outbox-mobile.png'), fullPage: true });
     await page.setViewportSize({ width: 390, height: 667 });
-    assert.ok(await page.locator('.container').evaluate(el => el.getBoundingClientRect().top >= 0));
+    assert.ok(await page.locator('.container').evaluate(el => el.getBoundingClientRect().top + scrollY >= 0));
     await page.locator('#enterBtn').scrollIntoViewIfNeeded();
     await page.setViewportSize({ width: 390, height: 844 });
     await page.evaluate(() => { window.__holdCommit = false; });
@@ -96,6 +103,22 @@ export function writeBatch(){const writes=[];return{update:(ref,value)=>writes.p
     await page.waitForFunction(() => [...document.querySelectorAll('.checkin-job.done')].some(e => e.textContent.includes('102')));
     assert.equal(await page.locator('#status').innerText(), currentStatus);
     await page.locator('#rewardConfirmBtn').click();
+    savedDatabase = await page.evaluate(() => localStorage.getItem('__test-db'));
+    await enter('102');
+    await page.waitForFunction(() => !document.querySelector('#enterBtn').disabled);
+    assert.equal(await page.evaluate(() => JSON.parse(sessionStorage.getItem('currentStudentId'))), '102');
+    assert.equal(await page.evaluate(() => JSON.parse(sessionStorage.getItem('studentInventory')).test), 1);
+    assert.equal(await page.evaluate(() => localStorage.getItem('__test-db')), savedDatabase);
+    const close = page.locator('.checkin-job.done .dismiss-job').first();
+    assert.equal(await close.innerText(), '\u00d7');
+    assert.equal(await close.getAttribute('title'), 'ปิดรายการแจ้งเตือน');
+    assert.ok(await close.evaluate(el => getComputedStyle(el).color !== 'rgb(255, 255, 255)' && el.getBoundingClientRect().width >= 44));
+    await page.waitForFunction(() => getComputedStyle(document.querySelector('#loadingOverlay')).opacity === '0');
+    await page.screenshot({ path: path.join(os.tmpdir(), 'kumon-collection-repeat-mobile.png'), fullPage: true });
+    const pendingBeforeClose = await page.locator('.checkin-job').count();
+    await close.click();
+    assert.equal(await page.locator('.checkin-job').count(), pendingBeforeClose - 1);
+    assert.equal(await page.evaluate(() => localStorage.getItem('__test-db')), savedDatabase);
     await page.evaluate(() => { window.__holdCommit = true; });
     await enter('104');
     await page.waitForFunction(() => !document.querySelector('#enterBtn').disabled, { timeout: 12000 });
@@ -108,13 +131,24 @@ export function writeBatch(){const writes=[];return{update:(ref,value)=>writes.p
     await page.evaluate(() => { window.__holdCommit = true; });
     const checkout = page.locator('.checkout-btn').first();
     const handler = await checkout.getAttribute('onclick');
-    const id = handler.match(/checkout\('([^']+)'\)/)?.[1] || handler.split("'")[1];
+    const id = await checkout.getAttribute('data-attendance-id') || handler.match(/checkout\('([^']+)'\)/)?.[1] || handler.split("'")[1];
     await checkout.click();
     await page.waitForFunction(() => Object.keys(localStorage).some(k => k.startsWith('kumon-outbox-v1:checkout:')));
     await page.reload();
     await page.waitForFunction(id => JSON.parse(localStorage.getItem('__test-db'))['attendance/'+id]?.status === 'completed', id);
     await page.waitForTimeout(600);
     await page.screenshot({ path: path.join(os.tmpdir(), 'kumon-result-mobile.png'), fullPage: true });
+    await page.goto(base + '/checkin.html');
+    await page.waitForFunction(() => document.querySelector('#loadingOverlay').classList.contains('hide'));
+    savedDatabase = await page.evaluate(() => localStorage.getItem('__test-db'));
+    await enter(id.split('_')[0]);
+    await page.waitForFunction(() => document.querySelector('#status').textContent.includes('วันนี้เรียนเสร็จแล้ว'));
+    await page.waitForFunction(() => !document.querySelector('#enterBtn').disabled);
+    assert.equal(await page.evaluate(() => JSON.parse(sessionStorage.getItem('currentStudentId'))), id.split('_')[0]);
+    assert.equal(await page.evaluate(() => localStorage.getItem('__test-db')), savedDatabase);
+    await page.locator('#collectionLinkWrapper a').click();
+    await page.locator('#studentInfo').filter({ hasText: id.split('_')[0] }).waitFor();
+    assert.ok(await page.locator('#collectionContainer .card:not(.locked)').count() > 0);
     await page.goto(base + '/schedule.html');
     await page.locator('#scheduleDataStatus').filter({ hasText: 'server' }).waitFor();
     await page.evaluate(() => { window.__fromCache = true; window.__notifyMock(); });
@@ -122,6 +156,57 @@ export function writeBatch(){const writes=[];return{update:(ref,value)=>writes.p
     await page.screenshot({ path: path.join(os.tmpdir(), 'kumon-schedule-mobile.png'), fullPage: true });
     await page.setViewportSize({width:1280,height:900});
     await page.screenshot({ path: path.join(os.tmpdir(), 'kumon-schedule-desktop.png'), fullPage: true });
+    await page.setViewportSize({width:390,height:844});
+    await page.goto(base + '/result.html');
+    await page.locator('#dataStatus').filter({ hasText: 'server' }).waitFor();
+    await page.evaluate(() => { window.__failCompletedRead = true; });
+    await page.locator('[data-tab="completed"]').click();
+    await page.locator('#cardView .retry-load').waitFor();
+    await page.waitForTimeout(450);
+    await page.screenshot({ path: path.join(os.tmpdir(), 'kumon-result-retry-mobile.png'), fullPage: true });
+    await page.locator('#cardView .retry-load').click();
+    await page.locator('.student-card-complete').first().waitFor();
+    savedDatabase = await page.evaluate(() => localStorage.getItem('__test-db'));
+    const tomorrow = await page.evaluate(() => { const d=new Date();d.setDate(d.getDate()+1);return d.toISOString(); });
+    await page.evaluate(iso => { window.TEST_DATE=iso;document.dispatchEvent(new Event('visibilitychange')); }, tomorrow);
+    await page.waitForFunction(() => document.querySelector('#cardView').textContent.includes('วันนี้ยังไม่มีนักเรียนเรียนเสร็จ'));
+    assert.equal(await page.evaluate(() => localStorage.getItem('__test-db')), savedDatabase);
+    await page.goto(base + '/schedule.html');
+    await page.locator('#scheduleDataStatus').filter({ hasText: 'server' }).waitFor();
+    const oldTitle = await page.locator('#pageTitle').innerText();
+    await page.evaluate(iso => { window.TEST_DATE=iso;document.dispatchEvent(new Event('visibilitychange')); }, tomorrow);
+    await page.waitForFunction(old => document.querySelector('#pageTitle').innerText !== old, oldTitle);
+    assert.equal(await page.evaluate(() => localStorage.getItem('__test-db')), savedDatabase);
+    const calendarDates = await page.evaluate(() => {
+      const format = date => `${date.getFullYear()}-${String(date.getMonth()+1).padStart(2,'0')}-${String(date.getDate()).padStart(2,'0')}`;
+      const initial=new Date(), target=new Date();target.setDate(target.getDate()+2);
+      return { initial:format(initial), target:format(target) };
+    });
+    await page.evaluate(initial => {
+      const db=JSON.parse(localStorage.getItem('__test-db'));
+      db['system/config'].rewardItems.test.releaseDate=initial;
+      localStorage.setItem('__test-db',JSON.stringify(db));
+    }, calendarDates.initial);
+    await page.goto(base + '/rewardCalendar.html');
+    await page.locator('#syncBtn').click();
+    await page.locator('.reward[data-id="test"]').first().waitFor();
+    const dataTransfer = await page.evaluateHandle(() => new DataTransfer());
+    await page.locator('.reward[data-id="test"]').first().dispatchEvent('dragstart', {dataTransfer});
+    await page.locator(`.day[data-date="${calendarDates.target}"]`).first().dispatchEvent('drop', {dataTransfer});
+    await page.waitForFunction(() => !document.querySelector('#saveBtn').disabled);
+    await page.evaluate(() => {
+      const db=JSON.parse(localStorage.getItem('__test-db'));
+      db['system/config'].rewardItems.test.name='Concurrent editor';
+      db['system/config'].rewardItems.second={...db['system/config'].rewardItems.test,id:'second',releaseDate:'2026-11-01'};
+      localStorage.setItem('__test-db',JSON.stringify(db));
+    });
+    await page.locator('#saveBtn').click();
+    await page.waitForFunction(() => document.querySelector('#saveBtn').textContent.includes('Saved'));
+    const calendarSaved = await page.evaluate(() => JSON.parse(localStorage.getItem('__test-db'))['system/config'].rewardItems);
+    assert.equal(calendarSaved.test.releaseDate,calendarDates.target);
+    assert.equal(calendarSaved.test.name,'Concurrent editor');
+    assert.ok(calendarSaved.second);
+    await page.screenshot({path:path.join(os.tmpdir(),'kumon-calendar-safe-save-mobile.png'),fullPage:false});
     assert.deepEqual(errors, []);
     console.log(JSON.stringify({ passed: true, firebase: 'mocked; all non-local requests intercepted', screenshots: ['kumon-outbox-mobile.png','kumon-result-mobile.png','kumon-schedule-mobile.png','kumon-schedule-desktop.png'].map(n=>path.join(os.tmpdir(),n)) }));
     await context.close();

@@ -14,6 +14,7 @@ function setup() {
       return nodes.get(id);
     },
     console: { error() {} }, showToast: (...args) => notices.push(args), hideMenu() {},
+    requireCurrentScheduleDate: () => true,
   });
   const section = (start, end) => source.slice(source.indexOf(start), source.indexOf(end, source.indexOf(start)));
   vm.runInContext('let scheduleActionBusy = false; let scheduleFromCache = false;\n' +

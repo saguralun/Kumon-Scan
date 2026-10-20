@@ -305,8 +305,6 @@ button:disabled{
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
 import {
   getFirestore,
-  doc,
-  updateDoc
 } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
 
 import {
@@ -318,6 +316,7 @@ import {
 } from "../checkin/reward/rewardItems.js";
 
 import { escapeHtml } from "../shared/textUtils.js";
+import { saveRewardReleaseDates } from "./shared/rewardCalendarService.js";
 
 const firebaseConfig = {
   apiKey: "AIzaSyBfJ9F94tdUw6sIY8ffUPV0AKxXWzZig8s",
@@ -366,6 +365,9 @@ const state = {
   rewardMap: new Map(),
 
   dirty:false,
+  saving:false,
+  syncing:false,
+  originalDates: new Map(),
 
   draggingItem:null,
 
@@ -528,6 +530,7 @@ function onDragOver(e){
 function onDrop(e){
 
   e.preventDefault();
+  if (state.saving || state.syncing) return;
 
   if(!state.draggingItem){
     return;
@@ -554,6 +557,7 @@ function onDrop(e){
 }
 
 function onDragStart(e){
+  if (state.saving || state.syncing) return;
 
   state.draggingItem =
     state.items.find(item =>
@@ -680,7 +684,7 @@ function getRewards(date){
 
 function updateSaveButton(){
 
-  ui.saveBtn.disabled = !state.dirty;
+  ui.saveBtn.disabled = !state.dirty || state.saving || state.syncing;
 
 }
 
@@ -757,68 +761,67 @@ function createMonthCards(){
 }
 
 async function sync() {
+  if (state.saving || state.syncing) return;
+  state.syncing = true;
+  ui.saveBtn.disabled = true;
 
   ui.syncBtn.disabled = true;
   ui.syncBtn.textContent = "Syncing...";
 
-  await checkVersionAndReload(db);
-
-  state.items = getRewardItems();
-
-  state.dirty = false;
-
-  updateSaveButton();
-
-  refresh();
-
-  ui.syncBtn.textContent = "✔ Synced";
-
-  setTimeout(() => {
-
-    ui.syncBtn.textContent = "🔄 Sync";
+  try {
+    const config = await checkVersionAndReload(db);
+    if (!config.ok) {
+      ui.syncBtn.textContent = "Sync";
+      return;
+    }
+    state.items = getRewardItems();
+    state.originalDates = new Map(state.items.map(item => [item.id, item.releaseDate]));
+    state.dirty = false;
+    refresh();
+    ui.syncBtn.textContent = "✔ Synced";
+    setTimeout(() => {
+      if (!state.syncing) ui.syncBtn.textContent = "🔄 Sync";
+    }, 1000);
+  } catch (error) {
+    console.error("Calendar sync failed", error);
+    alert("โหลดข้อมูลรางวัลไม่สำเร็จ กรุณาลองใหม่");
+    ui.syncBtn.textContent = "Sync";
+  } finally {
+    state.syncing = false;
     ui.syncBtn.disabled = false;
-
-  }, 1000);
+    updateSaveButton();
+  }
 
 }
 
 async function save(){
 
-  if(!state.dirty){
+  if(!state.dirty || state.saving || state.syncing){
     return;
   }
 
   ui.saveBtn.disabled = true;
   ui.saveBtn.textContent = "Saving...";
-
-  const rewardItems = {};
-
-  state.items.forEach(item => {
-
-    rewardItems[item.id] = item;
-
-  });
-
-  console.log("Saving", Object.keys(rewardItems).length, "items");
-
-  await updateDoc(
-    doc(db, "system", "config"),
-    {
-      rewardItems
-    }
-  );
-
-  state.dirty = false;
-
-  updateSaveButton();
-
-  ui.saveBtn.textContent = "✔ Saved";
-
-  setTimeout(() => {
-
+  ui.syncBtn.disabled = true;
+  state.saving = true;
+  const changes = state.items.filter(item => item.releaseDate !== state.originalDates.get(item.id))
+    .map(item => ({ id: item.id, previousDate: state.originalDates.get(item.id), releaseDate: item.releaseDate }));
+  try {
+    await saveRewardReleaseDates({ db, changes });
+    state.originalDates = new Map(state.items.map(item => [item.id, item.releaseDate]));
+    state.dirty = false;
+    ui.saveBtn.textContent = "✔ Saved";
+  } catch (error) {
+    console.error("Calendar save failed", error);
+    alert(error.message.startsWith("REWARD_CALENDAR_CONFLICT")
+      ? "มีการเปลี่ยนรางวัลเดียวกันจากที่อื่น กรุณา Sync แล้วตรวจสอบอีกครั้ง"
+      : "บันทึกไม่สำเร็จ รายการที่แก้ยังอยู่ กรุณาลองใหม่");
     ui.saveBtn.textContent = "💾 Save";
-
-  },1000);
+  } finally {
+    state.saving = false;
+    ui.syncBtn.disabled = false;
+    updateSaveButton();
+  }
 
 }
 

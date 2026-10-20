@@ -197,6 +197,7 @@ function loadSubmit(h) {
     ensureCheckinStartup: async () => {}, checkTodayAndTime: async () => true,
     reward: { prepareCheckinReward: null },
     setUIProcessing: value => { h.context.isProcessing = value; }, resetInput() {},
+    clearStudentSession() {}, updateCollectionButton() {},
     statusUI: { showError: text => h.messages.push(text), showStatus: text => h.messages.push(text) },
   });
   h.load('shared/checkinFlow.js');

@@ -271,6 +271,9 @@ let scheduleActionBusy = false;
 let scheduleFromCache = true;
 let firstLoad = true;
 let currentSlots = {};
+let scheduleDate = getTodayThai();
+let scheduleUnsubscribe = null;
+let scheduleListenerVersion = 0;
 let mobileSubject = "ME";
 let searchTimer = null;
 let searchResults = [];
@@ -371,7 +374,9 @@ function showVersion() {
 function loadSchedule() {
 
   const currentDate =
-    getTodayThai();
+    scheduleDate;
+  const version = ++scheduleListenerVersion;
+  if (scheduleUnsubscribe) scheduleUnsubscribe();
 
   const slotsRef =
     query(
@@ -385,8 +390,10 @@ function loadSchedule() {
     );
 
   renderSkeleton();
+  $("scheduleDataStatus").textContent = "กำลังเชื่อมต่อ";
 
-  onSnapshot(slotsRef, { includeMetadataChanges: true }, (snapshot) => {
+  scheduleUnsubscribe = onSnapshot(slotsRef, { includeMetadataChanges: true }, (snapshot) => {
+    if (version !== scheduleListenerVersion || currentDate !== scheduleDate) return;
     scheduleFromCache = snapshot.metadata.fromCache;
     updateScheduleDataStatus();
 
@@ -411,8 +418,36 @@ function loadSchedule() {
     updateTotalCounts(slots);
 
     firstLoad = false;
+  }, error => {
+    if (version !== scheduleListenerVersion || currentDate !== scheduleDate) return;
+    $("scheduleDataStatus").textContent = "โหลดตารางไม่สำเร็จ";
+    console.error("Schedule read failed", error);
   });
 
+}
+
+function ensureScheduleDate() {
+  const today = getTodayThai();
+  if (today === scheduleDate) return false;
+  scheduleDate = today;
+  currentSlots = {};
+  firstLoad = true;
+  hideMenu();
+  $("confirmModal").style.display = "none";
+  $("addWSModal").style.display = "none";
+  searchInput.value = "";
+  searchResults = [];
+  currentSearchIndex = -1;
+  searchCount.innerText = "0 / 0";
+  setThaiDateTitle();
+  loadSchedule();
+  return true;
+}
+
+function requireCurrentScheduleDate() {
+  if (!ensureScheduleDate()) return true;
+  showToast("วันที่เปลี่ยนแล้ว กรุณาเลือกรายการใหม่", "error");
+  return false;
 }
 
 function showVersionUpdate(serverVersion){
@@ -1174,7 +1209,7 @@ function initPageUI() {
   highlightCurrentSlot();
 
   setInterval(
-    highlightCurrentSlot, 
+    () => { ensureScheduleDate(); highlightCurrentSlot(); },
     60000
   );
 
@@ -1895,6 +1930,7 @@ async function checkIn(
   slotKey,
   scheduleStudent
 ) {
+  if (!requireCurrentScheduleDate()) return;
 
   if (isProcessing) 
     return;
@@ -1933,6 +1969,7 @@ async function checkIn(
 
     const studentData =
       studentResult.data;
+    if (!requireCurrentScheduleDate()) return;
 
     const scheduleData = {
       nickname:
@@ -1994,6 +2031,7 @@ async function cancelPlan(
   subject, 
   slot
 ) {
+  if (!requireCurrentScheduleDate()) return;
 
   hideMenu();
 
@@ -2063,6 +2101,7 @@ function cancelCheckOut(id, subject, slot) {
 }
 
 async function moveToTakeHome(studentID, subject, slotKey) {
+  if (!requireCurrentScheduleDate()) return;
   if (isProcessing) 
     return;
 
@@ -2167,6 +2206,7 @@ async function moveToTakeHome(studentID, subject, slotKey) {
 }
 
 async function returnToPlan(studentID, subject, slotKey) {
+  if (!requireCurrentScheduleDate()) return;
   if (isProcessing) 
     return;
 
@@ -2556,6 +2596,7 @@ function updateScheduleDataStatus() {
 }
 
 async function runScheduleAction(action) {
+  if (!requireCurrentScheduleDate()) return;
   if (scheduleActionBusy) return;
   scheduleActionBusy = true;
   const buttons = ["confirmBtn", "cancelBtn", "addWSConfirmBtn", "addWSCancelLastBtn", "addWSCloseBtn"]
@@ -2881,6 +2922,10 @@ function runStudentSearch(keyword){
 }
 
 window.switchMobileSubject = switchMobileSubject;
+window.addEventListener("pageshow", ensureScheduleDate);
+document.addEventListener("visibilitychange", () => {
+  if (document.visibilityState === "visible") ensureScheduleDate();
+});
 
 </script>
 </body>

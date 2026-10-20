@@ -36,6 +36,7 @@ function createUI(checkoutAttendance, stored = new Map()) {
     checkoutAttendance,
     isRetryableCheckoutError: error => error.code === 'unavailable',
     debugLog() {}, renderAll() {},
+    ensureResultDate: () => false,
     addRecentCheckout: entry => notices.push(entry),
     logError: () => new Promise(() => {}),
     loadCompleted: async () => {},

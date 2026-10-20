@@ -4,6 +4,7 @@ import {
   deleteField,
   runTransaction,
 } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
+import { getStudentDisplayName } from "./textUtils.js";
 
 import { 
 	debugLog, 
@@ -60,7 +61,6 @@ export async function moveToCompletedScheduleInTransaction({
 
   if (
     !checkedInData ||
-    !checkedInData.nickname ||
     !checkedInData.time
   ) {
 
@@ -69,10 +69,6 @@ export async function moveToCompletedScheduleInTransaction({
     if (!checkedInData) {
       missing.push("checkedInData");
     } else {
-      if (!checkedInData.nickname) {
-        missing.push("nickname");
-      }
-
       if (!checkedInData.time) {
         missing.push("time");
       }
@@ -94,6 +90,7 @@ export async function moveToCompletedScheduleInTransaction({
           completed: {
             [sid]: {
               ...checkedInData,
+              nickname: getStudentDisplayName(checkedInData, sid),
             },
           },
         },
@@ -267,10 +264,10 @@ export async function moveToCheckinScheduleInTransaction({
   }
 
   const finalCheckinData = {
-    nickname: studentData.nickname || "",
     firstName: studentData.firstName || "",
     lastName: studentData.lastName || "",
     ...(plannedData || {}),
+    nickname: getStudentDisplayName({ ...studentData, ...plannedData }, studentId),
     time: timeText,
   };
 

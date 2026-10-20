@@ -127,6 +127,7 @@ function createHarness(initial = {}) {
     }
     return harness;
   };
+  harness.load('shared/textUtils.js');
   return harness;
 }
 

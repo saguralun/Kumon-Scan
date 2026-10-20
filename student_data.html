@@ -225,6 +225,7 @@ import {
 	excelDateToJSDate,
 	logError,
 	debugLog,
+  escapeHtml,
 } from "./shared/index.js";
 
 import { $, qs } from "./checkin/ui/dom.js";
@@ -765,8 +766,6 @@ scrollBtn.addEventListener("click", () => {
 
 // --- [ฟังก์ชันจัดการ Pop-up เปลี่ยนสถานะ] ---
 window.toggleStatus = (docId, currentStatus, fullName) => {
-	const card = 
-		qs(`[data-id="${docId}"]`);
 	const nextStatus = 
 		!currentStatus;
 
@@ -776,8 +775,8 @@ window.toggleStatus = (docId, currentStatus, fullName) => {
 	};
 
 	$("targetStudentInfo").innerHTML = `
-		<span class="text-primary">${docId}</span><br>
-		${fullName}
+		<span class="text-primary">${escapeHtml(docId)}</span><br>
+		${escapeHtml(fullName)}
 	`;
 
 	$("statusActionText").innerText = 

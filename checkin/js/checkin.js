@@ -49,6 +49,7 @@ import {
 import {
   saveStudentSession,
   hasStudentSession,
+  clearStudentSession,
   clearAllCache,
 } from "../modules/storage.js";
 
@@ -77,11 +78,6 @@ const app = initializeApp(firebaseConfig);
 const db = getFirestore(app);
 const MAX_LENGTH = 5; // ความยาวสูงสุดของรหัสนักเรียน (ปรับตามจริง)
 const logoEl = $("adminLogo")
-const DEV_MODE =
-  location.hostname === "localhost" ||
-  //location.hostname === "127.0.0.1" ||
-  location.hostname.startsWith("192.168");
-const MOCK_IDS = ["512"];
 
 window.reward = reward;
 
@@ -101,7 +97,10 @@ const connection = createCheckinConnection({ db });
 const configRefresher = createCheckinConfigRefresher({
   db,
   readConfig: read => connection.runRead(read),
-  onConfig(config, setting) { cachedTodaySetting = setting; },
+  onConfig(config, setting) {
+    if (cachedTodaySetting?.enabled === false && setting.enabled === true) checkinStartupReady = false;
+    cachedTodaySetting = setting;
+  },
 });
 const checkinJobs = createCheckinQueue({ db, connection,
   ensureReady: ensureCheckinStartup, onChange: renderCheckinJobs,
@@ -123,100 +122,6 @@ window.submitID = async function () {
 
   checkinSuccess = false;
 
-  if (DEV_MODE && isMockUser(currentInput)) {
-    const finishDevWrite = await connection.beginWrite();
-    try {
-    console.log("🚧 DEV MODE: skip server");
-
-    setUIProcessing(true);
-
-    // fake progress เหมือนของจริง
-    progressUI.updateProgress(
-      "checkTime"
-    );
-    await reward.delay(100);
-
-    progressUI.updateProgress(
-      "loadStudent"
-    );
-    await reward.delay(100);
-
-    progressUI.updateProgress(
-      "attendance"
-    );
-    await reward.delay(100);
-
-    progressUI.updateProgress(
-      "processing"
-    );
-    await reward.delay(100);
-
-    progressUI.updateProgress(
-      "saveData"
-    );
-    await reward.delay(100);
-
-    const fakeStudent = mockStudent(currentInput);
-    studentData = fakeStudent;
-
-    const oldSnap = await getDoc(doc(db, "students", studentId));
-
-    if (oldSnap.exists()) {
-      const oldData = oldSnap.data();
-
-      Object.assign(fakeStudent.inventory, oldData.inventory || {});
-
-      fakeStudent.rewardStats = oldData.rewardStats || {};
-    }
-
-    const extraDisplay = getExtraDisplay(fakeStudent.extras || []);
-
-    const extras = fakeStudent.extras || [];
-
-    if (extraDisplay) {
-      await reward.showExtraPopup({
-        extraDisplay,
-        stopRandomAnimation,
-        startRandomAnimation,
-        setPopupStage: (stage) => {
-          popupStage = stage;
-        },
-      });
-    }
-
-    await reward.processCheckinReward({
-      db,
-      studentId,
-      studentData,
-      extras,
-      stopRandomAnimation,
-    });
-
-    progressUI.updateProgress("done");
-
-    qs(".progress-bar").style.display = "none";
-
-    $("progressText").style.display = "none";
-
-    $("rewardConfirmBtn").classList.remove("hidden");
-
-    $("collectionLinkWrapper").style.display = "flex";
-
-    saveStudentSession(studentId, studentData);
-
-    statusUI.showSuccess(
-      `DEV MODE<br>
-      ${escapeHtml(fakeStudent.firstName)} ${escapeHtml(fakeStudent.lastName)} (${escapeHtml(fakeStudent.nickname)})<br>
-      ✔ จำลองเช็คอินสำเร็จ`,
-    );
-    checkinSuccess = true;
-
-    return; // 🔥 สำคัญมาก ตัด flow จริง
-    } finally {
-      finishDevWrite();
-    }
-
-  }
 
   // 1. กันเบิ้ลระดับ Protocol ก่อนเลย
   if (isProcessing) return; // 1. กันเบิ้ลระดับ Protocol ก่อนเลย
@@ -233,6 +138,9 @@ window.submitID = async function () {
     // 2. เริ่มประมวลผล: ล็อก UI ทันทีเพื่อป้องกันการกดซ้ำ และแสดงสถานะกำลังประมวลผล
     setUIProcessing(true);
 
+    clearStudentSession();
+    updateCollectionButton();
+
     // Step 1: ตรวจสอบเวลา
     const readDeadline = createReadDeadline();
     progressUI.updateProgress(
@@ -246,6 +154,8 @@ window.submitID = async function () {
     try {
       await readDeadline.run(() => ensureCheckinStartup(), "startup");
       setting = await readDeadline.run(() => configRefresher.getTodaySetting(), "config");
+      // A same-day reopening must prepare the schedule that was skipped while closed.
+      await readDeadline.run(() => ensureCheckinStartup(), "startup");
     } catch (error) {
       console.warn("Check-in config unavailable", error);
       keepStartupOverlay = ["config/version-mismatch", "config/clock-invalid"].includes(error.code);
@@ -296,6 +206,9 @@ window.submitID = async function () {
     const submitted = checkinJobs.submit({ studentId, studentData, today, requestedAt });
     queuedId = submitted.job.id;
     if (submitted.existing) {
+      if (submitted.job.status === "done") {
+        showCollectionForStudent(studentId, studentData);
+      }
       statusUI.showStatus(submitted.job.status === "done"
         ? "มีผลเช็กอินแล้ว ดูได้ในรายการด้านล่าง"
         : "มีรายการรอยืนยันอยู่แล้ว ไม่ต้องส่งซ้ำ", "#946200");
@@ -310,6 +223,7 @@ window.submitID = async function () {
       return;
     }
     if (!outcome.value.attendanceResult) {
+      showCollectionForStudent(studentId, studentData);
       statusUI.showStatus("ยืนยันรายการแล้ว ดูผลในรายการด้านล่าง", "#267744");
       return;
     }
@@ -327,6 +241,9 @@ window.submitID = async function () {
     attendanceSaved = ["created", "reward_pending"].includes(attendanceResult.status);
 
     if (!canContinue) {
+      if (["active", "completed"].includes(attendanceResult.status)) {
+        showCollectionForStudent(studentId, studentData);
+      }
       return;
     }
 
@@ -389,9 +306,7 @@ window.submitID = async function () {
 
     $("rewardConfirmBtn").classList.remove("hidden");
 
-    $("collectionLinkWrapper").style.display = "flex";
-
-    saveStudentSession(studentId, studentData);
+    showCollectionForStudent(studentId, studentData);
     checkinJobs.acknowledge(queuedId);
 
     statusUI.showSuccess(
@@ -440,7 +355,9 @@ async function ensureCheckinStartup() {
       if (!await verifyClientClock(db, config)) {
         throw Object.assign(new Error("CLIENT_CLOCK_INVALID"), { code: "config/clock-invalid" });
       }
-      const scheduleBuildResult = await ensureDailyScheduleBuilt(db, config.lastDailyBuildDate);
+      const scheduleBuildResult = await ensureDailyScheduleBuilt(db, config.lastDailyBuildDate, {
+        teachingEnabled: config.weekly?.[getTodayWeekday()]?.enabled,
+      });
       if (scheduleBuildResult?.status === "failed") {
         statusUI.showError(
           "Schedule build failed. Please refresh when the network is stable.",
@@ -774,29 +691,6 @@ function stopRandomAnimation(finalReward) {
 
 }
 
-function mockStudent(studentId) {
-
-  const names = ["น้องเอ", "น้องบี", "น้องซี", "น้องดี"];
-
-  return {
-
-    firstName: names[Math.floor(Math.random() * names.length)],
-    lastName: studentId,
-    nickname: "Dev",
-    subject: ["ME", "EFL", "TRP"][Math.floor(Math.random() * 3)],
-
-    //extras: [{type:"WS",level:"G",ws:"111"}],
-    extras: [{type: "AT",level: "F"}],
-
-    inventory: {},
-
-  };
-
-}
-
-function isMockUser(id) {
-  return MOCK_IDS.includes(id);
-}
 
 logoEl.addEventListener("touchstart", () => {
 
@@ -853,6 +747,11 @@ function updateCollectionButton() {
       ? "flex"
       : "none";
 
+}
+
+function showCollectionForStudent(studentId, data) {
+  saveStudentSession(studentId, data);
+  updateCollectionButton();
 }
 
 function onRewardConfirm() {
@@ -1002,7 +901,11 @@ function renderCheckinJobs() {
       if (job.status !== "pending") {
         const button = document.createElement("button");
         button.type = "button";
-        button.textContent = job.status === "done" ? "ปิด" : "ลองใหม่";
+        const dismiss = job.status === "done";
+        button.textContent = dismiss ? "\u00d7" : "ลองใหม่";
+        button.classList.toggle("dismiss-job", dismiss);
+        button.title = dismiss ? "ปิดรายการแจ้งเตือน" : "ลองส่งรายการอีกครั้ง";
+        button.setAttribute("aria-label", `${button.title}: ${job.nickname}`);
         button.addEventListener("click", () => job.status === "done"
           ? checkinJobs.acknowledge(job.id) : checkinJobs.retry(job.id));
         row.append(button);

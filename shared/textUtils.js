@@ -1,5 +1,10 @@
 // 🛡️ ป้องกัน XSS เวลาแทรกข้อความ (ชื่อนักเรียน, nickname, ฯลฯ) เข้า innerHTML
 // ใช้ครอบทุกจุดที่เอาข้อมูลจาก Firestore/CSV import มาแสดงผลเป็น HTML
+export function getStudentDisplayName(data, studentId) {
+  return [data?.nickname, data?.firstName, studentId]
+    .find(value => typeof value === "string" && value.trim())?.trim() || "";
+}
+
 export function escapeHtml(value) {
 
   if (value === null || value === undefined) {
