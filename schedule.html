@@ -275,6 +275,7 @@ let scheduleDate = getTodayThai();
 let scheduleUnsubscribe = null;
 let scheduleListenerVersion = 0;
 let mobileSubject = "ME";
+let scheduleIsMobile = window.innerWidth <= 768;
 let searchTimer = null;
 let searchResults = [];
 let currentSearchIndex = -1;
@@ -571,7 +572,7 @@ function switchMobileSubject(subject){
 
   mobileSubject = subject;
 
-  renderMobileSchedule(currentSlots);
+  renderSchedule(currentSlots);
 
 }
 
@@ -789,6 +790,11 @@ function createStudentElement(
   wrapper.dataset.status =
     s.status;
 
+  wrapper.dataset.searchText = JSON.stringify([
+    s.studentID, rawName,
+    [s.firstName, s.lastName].filter(Boolean).join(" ")
+  ]);
+
   let iconClass = "plan-icon";
 
   if (s.status === "active")
@@ -914,13 +920,15 @@ function renderSubjectCell(
 
 function renderSchedule(slots) {
 
+  scheduleIsMobile = window.innerWidth <= 768;
+
   const desktop =
     $("desktopSchedule");
 
   const mobile =
     $("mobileSchedule");
 
-  if (window.innerWidth <= 768) {
+  if (scheduleIsMobile) {
 
     desktop.style.display = "none";
     mobile.style.display = "block";
@@ -935,6 +943,18 @@ function renderSchedule(slots) {
     renderDesktopSchedule(slots);
 
   }
+
+  runStudentSearch(searchInput.value, false);
+
+}
+
+function handleScheduleResize() {
+  if ((window.innerWidth <= 768) === scheduleIsMobile) return;
+
+  hideMenu();
+  setThaiDateTitle();
+  renderSchedule(currentSlots);
+  highlightCurrentSlot();
 
 }
 
@@ -1395,6 +1415,9 @@ function highlightCurrentSlot() {
     .querySelectorAll(".mobile-slot")
     .forEach(slot=>{
       slot.classList.remove("current-slot");
+      if (slot.dataset.slot !== slotKey) {
+        slot.querySelectorAll(".slot-now").forEach(badge => badge.remove());
+      }
     });
 
   const mobileSlot =
@@ -1403,6 +1426,13 @@ function highlightCurrentSlot() {
   if(mobileSlot){
 
     mobileSlot.classList.add("current-slot");
+
+    if (!mobileSlot.querySelector(".slot-now")) {
+      const badge = document.createElement("span");
+      badge.className = "slot-now";
+      badge.textContent = "NOW";
+      mobileSlot.querySelector(".mobile-slot-title > span").appendChild(badge);
+    }
 
   }
 
@@ -2825,10 +2855,10 @@ function clearSearch(){
 
 }
 
-function runStudentSearch(keyword){
+function runStudentSearch(keyword, focus = true){
 
   const allStudents =
-    document.querySelectorAll(
+    $(scheduleIsMobile ? "mobileSchedule" : "desktopSchedule").querySelectorAll(
       ".student-wrapper"
     );
 
@@ -2866,19 +2896,9 @@ function runStudentSearch(keyword){
 
   allStudents.forEach(el => {
 
-    const name =
-      normalizeText(
-        el.innerText
-      );
-
-    const tooltip =
-      normalizeText(
-        el.querySelector(".tooltip-id")?.innerText
-      );
-
-    const matched =
-      name.includes(cleanKeyword) ||
-      tooltip.includes(cleanKeyword);
+    const matched = JSON.parse(el.dataset.searchText).some(
+      value => normalizeText(value).includes(cleanKeyword)
+    );
 
     if(matched){
 
@@ -2911,7 +2931,12 @@ function runStudentSearch(keyword){
 
     currentSearchIndex = 0;
 
-    focusSearchResult();
+    if (focus) {
+      focusSearchResult();
+    } else {
+      searchResults[0].classList.add("search-current");
+      searchCount.innerText = `1 / ${searchResults.length}`;
+    }
 
   }else{
 
@@ -2922,6 +2947,7 @@ function runStudentSearch(keyword){
 }
 
 window.switchMobileSubject = switchMobileSubject;
+window.addEventListener("resize", handleScheduleResize);
 window.addEventListener("pageshow", ensureScheduleDate);
 document.addEventListener("visibilitychange", () => {
   if (document.visibilityState === "visible") ensureScheduleDate();
