@@ -8,7 +8,7 @@ const base = 'http://127.0.0.1:5173';
 (async () => {
   const browser = await chromium.launch({ channel: 'msedge', headless: true });
   try {
-    const context = await browser.newContext({ viewport: { width: 390, height: 844 }, timezoneId: 'Asia/Bangkok' });
+    const context = await browser.newContext({ viewport: { width: 390, height: 844 }, timezoneId: 'Asia/Bangkok', hasTouch: true });
     const blocked = [], errors = [];
     await context.route('**/*', route => {
       const url = route.request().url();
@@ -40,7 +40,7 @@ const base = 'http://127.0.0.1:5173';
         '14:30': { subjects: { ME: { planned: { '106': student('Later', 'FirstDelta', 'LastDelta'),
           '107': student('<img src=x onerror=alert(1)>', 'SafeName', 'SafeLast') } } } },
       };
-      const db = { 'system/config': { appVersion: '6.0.10' } };
+      const db = { 'system/config': { appVersion: '6.0.11' } };
       for (const [key, value] of Object.entries(slots)) db['dailySchedule/20261019/slots/' + key] = value;
       localStorage.setItem('__test-db', JSON.stringify(db));
     });
@@ -58,6 +58,39 @@ const base = 'http://127.0.0.1:5173';
     assert.equal(await mobile.locator('.student-wrapper').count(), 7);
     assert.equal(await mobile.locator('.student-wrapper img').count(), 0);
 
+    for (const width of [320, 360, 390, 430, 559, 560, 768]) {
+      await page.setViewportSize({ width, height: 844 });
+      await page.evaluate(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))));
+      const layout = await page.locator('.search-bar').evaluate(bar => {
+        const rect = el => {
+          const { x, y, width, height, right, bottom } = el.getBoundingClientRect();
+          return { x, y, width, height, right, bottom };
+        };
+        const input = bar.querySelector('input');
+        return { bar: rect(bar), input: rect(input), fontSize: getComputedStyle(input).fontSize,
+          actions: rect(bar.querySelector('.search-actions')),
+          buttons: [...bar.querySelectorAll('button')].map(el => ({ ...rect(el), label: el.getAttribute('aria-label'), title: el.title })) };
+      });
+      assert.equal(layout.fontSize, '16px');
+      assert.ok(layout.input.height >= 44);
+      for (const button of layout.buttons) {
+        assert.ok(button.width >= 44 && button.height >= 44, 'Touch target at width ' + width);
+        assert.ok(button.label && button.title);
+        assert.ok(button.x >= layout.bar.x && button.right <= layout.bar.right + 0.5);
+        assert.ok(button.bottom <= layout.bar.bottom + 0.5);
+      }
+      if (width < 560) assert.ok(layout.input.bottom <= layout.actions.y);
+      else assert.ok(layout.input.right <= layout.actions.x);
+      assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth));
+      const before = await page.locator('#searchNext').boundingBox();
+      await page.locator('#searchCount').evaluate(el => { el.textContent = '9999 / 9999'; });
+      assert.deepEqual(await page.locator('#searchNext').boundingBox(), before);
+      assert.ok(await page.locator('#searchCount').evaluate(el => el.scrollWidth <= el.clientWidth));
+      await page.locator('#searchCount').evaluate(el => { el.textContent = '0 / 0'; });
+      if ([320, 390, 560].includes(width)) await page.screenshot({ path: path.join(os.tmpdir(), `kumon-schedule-search-${width}.png`), fullPage: true });
+    }
+    await page.setViewportSize({ width: 390, height: 844 });
+
     const search = async (keyword, count = 1) => {
       await page.locator('#studentSearch').fill(keyword);
       await page.waitForTimeout(200);
@@ -72,9 +105,13 @@ const base = 'http://127.0.0.1:5173';
     await search('not-a-student', 0);
     assert.equal(await mobile.locator('.mobile-slot:visible').count(), 0);
     await search('same', 2);
-    await page.locator('#searchNext').click();
+    await page.locator('#searchNext').tap();
     assert.equal((await page.locator('#searchCount').innerText()).trim(), '2 / 2');
-    await page.locator('#searchPrev').click();
+    await page.locator('#searchPrev').tap();
+    assert.equal((await page.locator('#searchCount').innerText()).trim(), '1 / 2');
+    await page.locator('#studentSearch').press('Enter');
+    assert.equal((await page.locator('#searchCount').innerText()).trim(), '2 / 2');
+    await page.locator('#studentSearch').press('Enter');
     assert.equal((await page.locator('#searchCount').innerText()).trim(), '1 / 2');
     await search('FirstAlpha');
 
@@ -93,7 +130,9 @@ const base = 'http://127.0.0.1:5173';
       assert.equal((await page.locator('#searchCount').innerText()).trim(), width > 768 ? '1 / 2' : '1 / 1');
       if (width <= 768) assert.match(await mobile.locator('.mobile-tab.active').innerText(), /EFL/);
     }
-    await page.locator('#searchClear').click();
+    await page.locator('#searchClear').tap();
+    assert.equal(await page.locator('#studentSearch').inputValue(), '');
+    assert.equal(await page.locator('#studentSearch').evaluate(el => el === document.activeElement), true);
     await mobile.locator('.mobile-tab').nth(0).click();
     assert.equal(await mobile.locator('.student-wrapper').count(), 7);
     assert.equal(await mobile.locator('.mobile-slot:visible').count(), 2);
@@ -138,7 +177,7 @@ const base = 'http://127.0.0.1:5173';
     assert.equal(await page.evaluate(() => localStorage.getItem('__test-db')), initialDb);
     assert.deepEqual(errors, []);
     assert.deepEqual(blocked, []);
-    console.log(JSON.stringify({ passed: true, scenarios: ['responsive layout', 'NOW rollover', 'full-name search', 'search retention', 'badges and menu'], extraReads: 0, extraListeners: 0, writes: 0, productionRequests: 0 }));
+    console.log(JSON.stringify({ passed: true, scenarios: ['44px touch targets at 7 mobile widths', 'non-overlapping search controls', 'stable long result counter', 'touch navigation and clear', 'responsive layout', 'NOW rollover', 'full-name search', 'search retention', 'badges and menu'], extraReads: 0, extraListeners: 0, writes: 0, productionRequests: 0 }));
     await context.close();
   } finally { await browser.close(); }
 })().catch(error => { console.error(error); process.exitCode = 1; });

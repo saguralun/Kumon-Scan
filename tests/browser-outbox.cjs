@@ -70,7 +70,7 @@ if (require.main === module) (async () => {
       const date = new Date(), today = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Bangkok', year: 'numeric', month: '2-digit', day: '2-digit' }).format(date).replaceAll('-', '');
       const weekly = Object.fromEntries(Array.from({length:7},(_,i)=>[i,{enabled:true,open:'00:00',close:'23:59'}]));
       const db = {
-        'system/config': { appVersion:'6.0.10',serverTime:{__timestampISO:new Date(date.getTime()-3*86400000).toISOString()},weekly,
+        'system/config': { appVersion:'6.0.11',serverTime:{__timestampISO:new Date(date.getTime()-3*86400000).toISOString()},weekly,
           lastDailyBuildDate:today,rarities:[{id:'common',weight:100,badge:'Common'}],
           rewardItems:{test:{type:'shape',name:'Test Star',icon:'*',rarity:'common',releaseDate:'2020-01-01',enabled:true}} },
         ['dailySchedule/'+today]: {buildVersion:2,status:'complete'},

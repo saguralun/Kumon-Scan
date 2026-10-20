@@ -1632,34 +1632,62 @@ h2 {
   }
 
   .search-bar{
-
     margin:6px 0 8px;
-
+    flex-direction:column;
+    align-items:stretch;
+    flex-shrink:0;
+    gap:6px;
   }
 
   #studentSearch{
-    height:36px;
-    padding-left:12px;
-    padding-right:105px;
-    border-radius:12px;
-    font-size:14px;
+    flex:none;
+    min-width:0;
+    box-sizing:border-box;
+    height:44px;
+    padding:0 12px;
+    border:1px solid var(--border-soft);
+    border-radius:8px;
+    font-size:16px;
     background:#fff;
+    transition:background-color .2s, box-shadow .2s, border-color .2s;
   }
 
   .search-actions{
-    right:8px;
+    position:static;
+    transform:none;
+    display:grid;
+    grid-template-columns:44px minmax(64px,1fr) 44px 44px;
+    gap:8px;
   }
 
   .search-actions button{
-    width:28px;
-    height:28px;
-    border-radius:10px;
+    width:44px;
+    height:44px;
+    padding:0;
+    display:grid;
+    place-items:center;
+    border-radius:8px;
     background:#eef2ff;
+    color:var(--primary);
+    font-size:16px;
+    touch-action:manipulation;
+  }
+
+  .search-actions button:hover,
+  .search-actions button:active{
+    background:#dce7fb;
+  }
+
+  .search-actions button:focus-visible{
+    outline:2px solid var(--primary);
+    outline-offset:2px;
   }
 
   #searchCount{
-    min-width:34px;
+    min-width:0;
     font-size:12px;
+    white-space:nowrap;
+    font-variant-numeric:tabular-nums;
   }
 
   .mobile-layout{
@@ -1928,6 +1956,22 @@ h2 {
 }
 
 @media (min-width:560px) and (max-width:768px){
+
+  .search-bar{
+    flex-direction:row;
+    align-items:center;
+    gap:8px;
+  }
+
+  #studentSearch{
+    flex:1;
+    width:0;
+  }
+
+  .search-actions{
+    flex:0 0 236px;
+    grid-template-columns:44px 80px 44px 44px;
+  }
 
   .mobile-student-list{
     grid-template-columns:repeat(4,minmax(0,1fr));

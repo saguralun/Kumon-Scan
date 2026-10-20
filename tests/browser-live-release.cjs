@@ -70,12 +70,19 @@ const version = fs.readFileSync(path.join(__dirname, '../shared/versionControl.j
     const mobile = page.locator('#mobileSchedule'), desktop = page.locator('#desktopSchedule');
     assert.equal(await mobile.isVisible(), true);
     assert.equal(await mobile.locator('.mobile-tab').count(), 3);
+    for (const id of ['searchPrev', 'searchNext', 'searchClear']) {
+      const bounds = await page.locator('#' + id).boundingBox();
+      assert.ok(bounds.width >= 44 && bounds.height >= 44, id + ' touch target');
+    }
     const first = mobile.locator('.student-wrapper').first();
     if (await first.count()) {
       const [id] = JSON.parse(await first.getAttribute('data-search-text'));
       await page.locator('#studentSearch').fill(String(id));
       await page.waitForFunction(() => document.querySelector('#mobileSchedule .search-hit'));
+      await page.locator('#searchNext').click();
+      await page.locator('#searchPrev').click();
       await page.locator('#searchClear').click();
+      assert.equal(await page.locator('#studentSearch').inputValue(), '');
     }
     await snapshot('schedule-mobile');
     await page.setViewportSize({ width: 1280, height: 900 });
@@ -86,13 +93,17 @@ const version = fs.readFileSync(path.join(__dirname, '../shared/versionControl.j
     await page.setViewportSize({ width: 390, height: 844 });
     await mobile.waitFor({ state: 'visible' });
     assert.ok(await mobile.locator('.slot-now').count() <= 1);
-    summaries.push({ page: 'schedule', version, entries: total, responsive: true, server: true });
+    summaries.push({ page: 'schedule', version, entries: total, responsive: true, searchButtons44px: true, server: true });
 
     const served = await context.request.get(base + '/shared/versionControl.js');
     assert.equal(served.status(), 200);
     assert.equal(await served.text(), fs.readFileSync(path.join(__dirname, '../shared/versionControl.js'), 'utf8'));
     const schedule = await context.request.get(base + '/schedule.html');
     assert.equal(await schedule.text(), fs.readFileSync(path.join(__dirname, '../schedule.html'), 'utf8'));
+    const stylesheet = await context.request.get(base + '/schedule/css/schedule.css');
+    assert.equal(stylesheet.status(), 200);
+    assert.equal(await stylesheet.text(), fs.readFileSync(path.join(__dirname, '../schedule/css/schedule.css'), 'utf8'));
+    assert.match(stylesheet.headers()['cache-control'], /no-cache/);
     const hiddenGit = await context.request.get(base + '/.git/config');
     assert.equal(hiddenGit.status(), 404);
     assert.deepEqual(blockedWrites, []);

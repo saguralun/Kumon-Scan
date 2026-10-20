@@ -69,19 +69,20 @@
       type="text"
       placeholder="🔍 ค้นหาชื่อนักเรียน / รหัส"
       autocomplete="off"
+      aria-label="ค้นหาชื่อนักเรียนหรือรหัส"
     />
 
     <div class="search-actions">
 
-      <button id="searchPrev">◀</button>
+      <button id="searchPrev" type="button" aria-label="ผลค้นหาก่อนหน้า" title="ผลค้นหาก่อนหน้า">◀</button>
 
-      <span id="searchCount">
+      <span id="searchCount" role="status" aria-live="polite" aria-atomic="true">
         0 / 0
       </span>
 
-      <button id="searchNext">▶</button>
+      <button id="searchNext" type="button" aria-label="ผลค้นหาถัดไป" title="ผลค้นหาถัดไป">▶</button>
 
-      <button id="searchClear">
+      <button id="searchClear" type="button" aria-label="ล้างคำค้น" title="ล้างคำค้น">
         ✖
       </button>
 

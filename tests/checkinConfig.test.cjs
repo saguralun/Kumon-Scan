@@ -7,7 +7,7 @@ const { createHarness, root } = require('./helpers/firestore.cjs');
 
 const openDay = { enabled: true, open: '00:00', close: '23:59' };
 const config = (setting = openDay) => ({
-  appVersion: '6.0.10', weekly: { 1: setting }, rarities: [], rewardItems: {},
+  appVersion: '6.0.11', weekly: { 1: setting }, rarities: [], rewardItems: {},
 });
 
 function setup(data = config()) {
