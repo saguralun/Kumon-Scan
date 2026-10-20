@@ -37,6 +37,7 @@ const version = fs.readFileSync(path.join(__dirname, '../shared/versionControl.j
 
     await page.goto(base + '/checkin.html');
     await page.waitForFunction(() => document.querySelector('#loadingOverlay').classList.contains('hide'), null, { timeout: 20000 });
+    await page.waitForFunction(() => getComputedStyle(document.querySelector('#loadingOverlay')).opacity === '0');
     assert.match(await page.locator('#versionLabel').innerText(), new RegExp(version.replaceAll('.', '\\.')));
     assert.equal(await page.locator('.keypad button').count(), 12);
     assert.equal(await page.locator('#display').getAttribute('class'), 'placeholder');
@@ -48,13 +49,20 @@ const version = fs.readFileSync(path.join(__dirname, '../shared/versionControl.j
     await page.goto(base + '/result.html');
     await page.locator('#dataStatus').filter({ hasText: 'server' }).waitFor({ timeout: 20000 });
     assert.ok((await page.locator('#appVersion').innerText()).includes(version));
-    const active = await page.locator('.checkout-btn').count();
+    const activeBySubject = {};
+    for (const subject of ['ME', 'EFL', 'TRP']) {
+      const button = page.locator(`.sub-btn[data-subject="${subject}"]`);
+      const count = Number(await button.locator('strong').innerText());
+      await button.click();
+      await page.waitForFunction(count => document.querySelectorAll('.checkout-btn').length === count, count);
+      activeBySubject[subject] = count;
+    }
     assert.equal(await page.locator('.header-actions a').count(), 2);
     await snapshot('result-mobile');
     await page.locator('[data-tab="completed"]').click();
     await page.locator('#dataStatus').filter({ hasText: 'server' }).waitFor({ timeout: 20000 });
     assert.equal(await page.locator('.retry-load').count(), 0);
-    summaries.push({ page: 'result', version, active, completed: await page.locator('.student-card-complete').count(), server: true });
+    summaries.push({ page: 'result', version, activeBySubject, completed: await page.locator('.student-card-complete').count(), server: true });
 
     await page.goto(base + '/schedule.html');
     await page.locator('#scheduleDataStatus').filter({ hasText: 'server' }).waitFor({ timeout: 20000 });
