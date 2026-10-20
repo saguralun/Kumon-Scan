@@ -44,9 +44,19 @@ export function writeBatch(){const writes=[];return{update:(ref,value)=>writes.p
   const browser = await chromium.launch({ channel: 'msedge', headless: true });
   try {
     const context = await browser.newContext({ viewport: { width: 390, height: 844 }, timezoneId: 'Asia/Bangkok' });
+    let clockMode = 'slow', clockRequests = 0, clockRequestedAt = 0;
     await context.route('**/*', async route => {
       const url = route.request().url();
       if (url.startsWith(base + '/')) return route.continue();
+      if (url.startsWith('https://scan-qrcode-kumon.web.app/manifest/manifest-checkin.json?clock=')) {
+        clockRequests++;
+        clockRequestedAt = Date.now();
+        if (clockMode === 'slow') await new Promise(resolve => setTimeout(resolve, 4500));
+        return route.fulfill({ status: 200, headers: {
+          Date: new Date().toUTCString(), 'Cache-Control': 'no-store',
+          'Access-Control-Allow-Origin': '*', 'Access-Control-Expose-Headers': 'Date, Age',
+        }, body: '' }).catch(() => {});
+      }
       if (url.includes('firebase-firestore.js')) return route.fulfill({ contentType: 'text/javascript', body: mock });
       if (url.includes('firebase-app.js')) return route.fulfill({ contentType: 'text/javascript', body: 'export const initializeApp = () => ({});' });
       if (url.includes('canvas-confetti')) return route.fulfill({ contentType: 'text/javascript', body: 'export default function confetti(){}' });
@@ -57,13 +67,14 @@ export function writeBatch(){const writes=[];return{update:(ref,value)=>writes.p
       const date = new Date(), today = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Bangkok', year: 'numeric', month: '2-digit', day: '2-digit' }).format(date).replaceAll('-', '');
       const weekly = Object.fromEntries(Array.from({length:7},(_,i)=>[i,{enabled:true,open:'00:00',close:'23:59'}]));
       const db = {
-        'system/config': { appVersion:'6.0.7',serverTime:{__timestampISO:date.toISOString()},weekly,
+        'system/config': { appVersion:'6.0.8',serverTime:{__timestampISO:new Date(date.getTime()-3*86400000).toISOString()},weekly,
           lastDailyBuildDate:today,rarities:[{id:'common',weight:100,badge:'Common'}],
           rewardItems:{test:{type:'shape',name:'Test Star',icon:'*',rarity:'common',releaseDate:'2020-01-01',enabled:true}} },
         ['dailySchedule/'+today]: {buildVersion:2,status:'complete'},
       };
       for(const id of ['101','102','103','104'])db['students/'+id]={active:true,firstName:'First'+id,lastName:'Last'+id,nickname:'Student '+id,subject:'ME',weeklyPlans:Object.fromEntries(Array.from({length:7},(_,i)=>[i,{timeSlot:'17:30',timeAverage:'17:30',planStrength:5,totalSessions:1}]))};
       localStorage.setItem('__test-db',JSON.stringify(db));
+      localStorage.setItem('__test-initial-db',JSON.stringify(db));
     });
     const page = await context.newPage();
     const errors = [];
@@ -73,7 +84,17 @@ export function writeBatch(){const writes=[];return{update:(ref,value)=>writes.p
       await page.locator('#enterBtn').click();
     };
     await page.goto(base + '/checkin.html');
+    await page.locator('#status').filter({ hasText: 'ตรวจสอบเวลาไม่สำเร็จ' }).waitFor({timeout:7000});
+    assert.ok(Date.now() - clockRequestedAt < 4000);
+    assert.equal(await page.evaluate(() => localStorage.getItem('__test-db') === localStorage.getItem('__test-initial-db')), true);
+    assert.equal(await page.locator('.checkin-job').count(), 0);
+    await page.waitForFunction(() => getComputedStyle(document.querySelector('#loadingOverlay')).opacity === '0');
+    await page.screenshot({path:path.join(os.tmpdir(),'kumon-clock-timeout-mobile.png'),fullPage:true});
+    clockMode = 'ok';
+    await page.reload();
     await page.waitForFunction(() => document.querySelector('#loadingOverlay').classList.contains('hide'));
+    assert.ok(clockRequests >= 2);
+    assert.equal(await page.evaluate(() => localStorage.getItem('__test-db') === localStorage.getItem('__test-initial-db')), true);
     await enter('101');
     await page.locator('#rewardConfirmBtn').waitFor({ state: 'visible' });
     await page.locator('#rewardConfirmBtn').click();

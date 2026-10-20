@@ -36,9 +36,6 @@ import {
   handleAttendanceResult,
   processCheckinSuccess,
   handleStudentResult,
-  getTimeDiffMinutes,
-  refreshServerTime,
-  MAX_SERVER_TIME_AGE_MINUTES,
   escapeHtml,
 } from "/shared/index.js";
 
@@ -58,6 +55,7 @@ import {
 } from "../modules/settings.js";
 
 import { createCheckinConfigRefresher } from "../modules/configRefresh.js";
+import { verifyCheckinClock } from "../modules/clock.js";
 import { createReadDeadline } from "/shared/readDeadline.js";
 import { createCheckinConnection } from "../modules/connection.js";
 import { createCheckinQueue, waitForCheckinJob } from "../modules/checkinQueue.js";
@@ -350,11 +348,11 @@ async function ensureCheckinStartup() {
   // Keep one initialization running after a UI timeout; scans cannot bypass it.
   checkinStartupTask = (async () => {
     const config = await configRefresher.refresh();
+    if (!await verifyClientClock(db, config)) {
+      throw Object.assign(new Error("CLIENT_CLOCK_INVALID"), { code: "config/clock-invalid" });
+    }
     const finishStartupWrite = await connection.beginWrite();
     try {
-      if (!await verifyClientClock(db, config)) {
-        throw Object.assign(new Error("CLIENT_CLOCK_INVALID"), { code: "config/clock-invalid" });
-      }
       const scheduleBuildResult = await ensureDailyScheduleBuilt(db, config.lastDailyBuildDate, {
         teachingEnabled: config.weekly?.[getTodayWeekday()]?.enabled,
       });
@@ -403,7 +401,9 @@ window.addEventListener("load", async () => {
       }).catch(console.error);
 
     statusUI.showError(
-      error.isCheckinReadTimeout
+      error.stage === "clock"
+        ? "ตรวจสอบเวลาไม่สำเร็จ กรุณาตรวจอินเทอร์เน็ตแล้วลองอีกครั้ง"
+        : error.isCheckinReadTimeout
         ? "การเชื่อมต่อใช้เวลานาน ระบบยังเตรียมข้อมูลอยู่ กรุณาลองอีกครั้ง"
         : "Startup failed. Please refresh and try again.",
       "orange"
@@ -513,45 +513,7 @@ async function verifyClientClock(
   db,
   config
 ) {
-
-  let diff =
-    getTimeDiffMinutes(
-      config.serverTime
-    );
-
-  // diff === null หมายถึงไม่มี serverTime ให้เทียบเลย ต้อง refresh ก่อน
-  // (ห้ามผ่านเลย เพราะ `null <= 60` จะเป็น true และข้ามการตรวจนาฬิกาไปดื้อ ๆ)
-  if (diff !== null && diff <= MAX_SERVER_TIME_AGE_MINUTES) {
-    return true;
-  }
-
-  console.warn(
-    "Refresh Server Time..."
-  );
-
-  const newServerTime =
-    await refreshServerTime(db);
-
-  diff =
-    getTimeDiffMinutes(
-      newServerTime
-    );
-
-  console.log(
-    "Diff After Refresh =",
-    diff
-  );
-
-  if (diff !== null && diff <= MAX_SERVER_TIME_AGE_MINUTES) {
-    return true;
-  }
-
-  console.error(
-    "Clock Invalid"
-  );
-
-  return false;
-
+  return verifyCheckinClock(config);
 }
 
 window.press = function (num) {

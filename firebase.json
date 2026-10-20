@@ -9,6 +9,22 @@
       "**/*.log",
       "tests/**",
       "admin.html"
+    ],
+    "headers": [
+      {
+        "regex": ".*\\.(html|js|css)$",
+        "headers": [
+          { "key": "Cache-Control", "value": "no-cache, max-age=0, must-revalidate" }
+        ]
+      },
+      {
+        "source": "/manifest/manifest-checkin.json",
+        "headers": [
+          { "key": "Cache-Control", "value": "no-store" },
+          { "key": "Access-Control-Allow-Origin", "value": "*" },
+          { "key": "Access-Control-Expose-Headers", "value": "Date, Age" }
+        ]
+      }
     ]
   }
 }
