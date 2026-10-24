@@ -10,7 +10,7 @@ const version = fs.readFileSync(path.join(__dirname, '../shared/versionControl.j
   const browser = await chromium.launch({ channel: 'msedge', headless: true });
   try {
     const context = await browser.newContext({ viewport: { width: 390, height: 844 }, timezoneId: 'Asia/Bangkok', serviceWorkers: 'block' });
-    const blockedWrites = [], errors = [], failedAssets = [], summaries = [];
+    const blockedWrites = [], errors = [], failedAssets = [], failedRequests = [], summaries = [];
     // Read-only smoke test: even automatic background work cannot write to production.
     await context.route('**/*', route => {
       const request = route.request(), url = new URL(request.url());
@@ -28,6 +28,10 @@ const version = fs.readFileSync(path.join(__dirname, '../shared/versionControl.j
     page.on('pageerror', error => errors.push(error.message));
     page.on('console', message => { if (message.type() === 'error') errors.push(message.text()); });
     page.on('response', response => {
+      if (response.status() >= 400) {
+        const url = new URL(response.url());
+        failedRequests.push({ url: url.origin + url.pathname, status: response.status(), method: response.request().method() });
+      }
       if (response.status() >= 400 && /\.(js|css)(\?|$)/.test(response.url())) failedAssets.push({ url: response.url(), status: response.status() });
     });
     const snapshot = async name => {
@@ -115,6 +119,7 @@ const version = fs.readFileSync(path.join(__dirname, '../shared/versionControl.j
     assert.equal(hiddenGit.status(), 404);
     assert.deepEqual(blockedWrites, []);
     assert.deepEqual(failedAssets, []);
+    if (errors.length) console.error(JSON.stringify({ summaries, failedRequests, errors, blockedWrites }));
     assert.deepEqual(errors, []);
     console.log(JSON.stringify({ passed: true, summaries, blockedWriteAttempts: blockedWrites.length, productionWrites: 0, gitConfigStatus: hiddenGit.status(), runtimeErrors: errors.length }));
     await context.close();
