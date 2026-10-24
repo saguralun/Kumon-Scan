@@ -6,11 +6,13 @@ import { $ } from "./dom.js";
 
 export function showStatus(
   message,
-  color = "transparent"
+  color = "transparent",
+  { expanded = false } = {}
 ){
 
   const el = $("status");
 
+  el.classList.toggle("checkin-job-status", expanded);
   el.style.color = color;
   el.innerHTML = message || "&nbsp;";
 }

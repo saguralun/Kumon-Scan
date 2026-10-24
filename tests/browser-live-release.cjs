@@ -104,6 +104,13 @@ const version = fs.readFileSync(path.join(__dirname, '../shared/versionControl.j
     assert.equal(stylesheet.status(), 200);
     assert.equal(await stylesheet.text(), fs.readFileSync(path.join(__dirname, '../schedule/css/schedule.css'), 'utf8'));
     assert.match(stylesheet.headers()['cache-control'], /no-cache/);
+    for (const file of ['checkin.html', 'checkin/js/checkin.js', 'checkin/modules/checkinQueue.js',
+      'checkin/ui/checkinJobStatus.js', 'checkin/ui/statusUI.js', 'checkin/css/checkin.css']) {
+      const response = await context.request.get(base + '/' + file);
+      assert.equal(response.status(), 200, file);
+      assert.equal(await response.text(), fs.readFileSync(path.join(__dirname, '..', file), 'utf8'), file);
+      assert.match(response.headers()['cache-control'], /no-cache/, file);
+    }
     const hiddenGit = await context.request.get(base + '/.git/config');
     assert.equal(hiddenGit.status(), 404);
     assert.deepEqual(blockedWrites, []);

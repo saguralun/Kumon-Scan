@@ -70,12 +70,12 @@ if (require.main === module) (async () => {
       const date = new Date(), today = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Bangkok', year: 'numeric', month: '2-digit', day: '2-digit' }).format(date).replaceAll('-', '');
       const weekly = Object.fromEntries(Array.from({length:7},(_,i)=>[i,{enabled:true,open:'00:00',close:'23:59'}]));
       const db = {
-        'system/config': { appVersion:'6.0.11',serverTime:{__timestampISO:new Date(date.getTime()-3*86400000).toISOString()},weekly,
+        'system/config': { appVersion:'6.0.12',serverTime:{__timestampISO:new Date(date.getTime()-3*86400000).toISOString()},weekly,
           lastDailyBuildDate:today,rarities:[{id:'common',weight:100,badge:'Common'}],
           rewardItems:{test:{type:'shape',name:'Test Star',icon:'*',rarity:'common',releaseDate:'2020-01-01',enabled:true}} },
         ['dailySchedule/'+today]: {buildVersion:2,status:'complete'},
       };
-      for(const id of ['101','102','103','104'])db['students/'+id]={active:true,firstName:'First'+id,lastName:'Last'+id,nickname:'Student '+id,subject:'ME',weeklyPlans:Object.fromEntries(Array.from({length:7},(_,i)=>[i,{timeSlot:'17:30',timeAverage:'17:30',planStrength:5,totalSessions:1}]))};
+      for(const id of ['101','102','103','104','105'])db['students/'+id]={active:true,firstName:'First'+id,lastName:'Last'+id,nickname:'Student '+id,subject:'ME',weeklyPlans:Object.fromEntries(Array.from({length:7},(_,i)=>[i,{timeSlot:'17:30',timeAverage:'17:30',planStrength:5,totalSessions:1}]))};
       localStorage.setItem('__test-db',JSON.stringify(db));
       localStorage.setItem('__test-initial-db',JSON.stringify(db));
     });
@@ -109,8 +109,43 @@ if (require.main === module) (async () => {
     assert.equal(await page.evaluate(() => localStorage.getItem('__test-db')), savedDatabase);
     assert.equal(await page.locator('#collectionLinkWrapper').isVisible(), true);
     await page.evaluate(() => { window.__holdCommit = true; });
+    await enter('105');
+    await page.waitForFunction(() => !document.querySelector('#enterBtn').disabled);
+    assert.match(await page.locator('#status').innerText(), /รับรายการเช็กอินแล้ว กำลังรอยืนยันจากระบบ/);
+    assert.match(await page.locator('#status').innerText(), /นักเรียนคนถัดไปเช็กอินต่อได้ทันที ไม่ต้องกรอกรหัสซ้ำ/);
+    await page.waitForFunction(() => getComputedStyle(document.querySelector('#loadingOverlay')).opacity === '0');
+    const checkStatusFits = async () => {
+      assert.ok(await page.locator('#status').evaluate(el => el.scrollHeight <= el.clientHeight + 1));
+      assert.ok(await page.evaluate(() => document.querySelector('#status').getBoundingClientRect().bottom <= document.querySelector('.keypad').getBoundingClientRect().top));
+      assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth));
+    };
+    await checkStatusFits();
+    for (const viewport of [{ width: 320, height: 667 }, { width: 390, height: 667 }, { width: 1280, height: 900 }]) {
+      await page.setViewportSize(viewport);
+      await checkStatusFits();
+      assert.ok(await page.locator('.container').evaluate(el => el.getBoundingClientRect().top + scrollY >= 0));
+    }
+    await page.setViewportSize({ width: 390, height: 844 });
+    await page.screenshot({ path: path.join(os.tmpdir(), 'kumon-checkin-status-pending.png'), fullPage: true });
+    const pendingOps = await page.evaluate(() => ({ ...window.__firestoreOps }));
+    await page.evaluate(() => {
+      const key = Object.keys(localStorage).find(k => k.startsWith('kumon-outbox-v1:checkin:') && JSON.parse(localStorage.getItem(k)).studentId === '105');
+      window.dispatchEvent(new StorageEvent('storage', { key }));
+    });
+    assert.deepEqual(await page.evaluate(() => window.__firestoreOps), pendingOps);
+    await page.evaluate(() => { window.__holdCommit = false; for (const done of window.__pendingCommits || []) done(); window.__pendingCommits = []; });
+    await page.waitForFunction(() => document.querySelector('#status').textContent.includes('ยืนยันการเช็กอินสำเร็จแล้ว'));
+    await page.waitForFunction(() => getComputedStyle(document.querySelector('#status')).color === 'rgb(38, 119, 68)');
+    assert.match(await page.locator('#status').innerText(), /บันทึกรางวัล Test Star ใน Collection แล้ว/);
+    assert.equal(await page.locator('#checkinQueue').isVisible(), false);
+    assert.equal(await page.locator('#rewardConfirmBtn').isVisible(), false);
+    assert.equal(await page.locator('#loadingOverlay').evaluate(el => el.classList.contains('hide')), true);
+    assert.equal(await page.evaluate(() => JSON.parse(localStorage.getItem('__test-db'))['students/105'].inventory.test), 1);
+    await checkStatusFits();
+    await page.screenshot({ path: path.join(os.tmpdir(), 'kumon-checkin-status-confirmed.png'), fullPage: true });
+    await page.evaluate(() => { window.__holdCommit = true; });
     await enter('102');
-    await page.waitForFunction(() => !document.querySelector('#enterBtn').disabled, { timeout: 12000 });
+    await page.waitForFunction(() => !document.querySelector('#enterBtn').disabled, null, { timeout: 20000 });
     assert.match(await page.locator('#checkinQueue').innerText(), /Student 102/);
     await page.waitForFunction(() => getComputedStyle(document.querySelector('#loadingOverlay')).opacity === '0');
     assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth));
@@ -160,7 +195,7 @@ if (require.main === module) (async () => {
     assert.equal(await page.evaluate(() => localStorage.getItem('__test-db')), savedDatabase);
     await page.evaluate(() => { window.__holdCommit = true; });
     await enter('104');
-    await page.waitForFunction(() => !document.querySelector('#enterBtn').disabled, { timeout: 12000 });
+    await page.waitForFunction(() => !document.querySelector('#enterBtn').disabled, null, { timeout: 20000 });
     await page.reload();
     await page.waitForFunction(() => Object.keys(localStorage).filter(k => k.startsWith('kumon-outbox-v1:checkin:')).some(k => {
       const job = JSON.parse(localStorage.getItem(k)); return job.studentId === '104' && job.status === 'done';

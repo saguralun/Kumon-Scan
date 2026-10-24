@@ -40,7 +40,7 @@ const base = 'http://127.0.0.1:5173';
         '14:30': { subjects: { ME: { planned: { '106': student('Later', 'FirstDelta', 'LastDelta'),
           '107': student('<img src=x onerror=alert(1)>', 'SafeName', 'SafeLast') } } } },
       };
-      const db = { 'system/config': { appVersion: '6.0.11' } };
+      const db = { 'system/config': { appVersion: '6.0.12' } };
       for (const [key, value] of Object.entries(slots)) db['dailySchedule/20261019/slots/' + key] = value;
       localStorage.setItem('__test-db', JSON.stringify(db));
     });

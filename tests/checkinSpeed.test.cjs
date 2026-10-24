@@ -234,7 +234,7 @@ test('an SDK write timeout is never described as if no save had started', async 
   const scan = h.context.window.submitID();
   await flush();
   await flush();
-  await h.advance(7000);
+  await h.advance(15000);
   await scan;
   assert.equal(attempted, true);
   assert.equal(h.context.isProcessing, false);
@@ -254,15 +254,41 @@ test('a late connection write lease is released after the scan timed out without
   await flush();
   for (let i = 0; i < 10 && !requested; i++) await flush();
   assert.equal(requested, 1);
-  await h.advance(7000);
+  await h.advance(15000);
   await scan;
   assert.equal(h.context.isProcessing, false);
   assert.equal(h.stats.writes, 0);
-  await h.advance(3000);
   lease.resolve(() => { releases++; });
   await flush();
   assert.equal(releases, 1);
   assert.equal(h.stats.writes, 0);
   assert.equal(h.read(attendance), undefined);
   h.context.checkinJobs.dispose();
+});
+
+test('queued confirmation waits the full fifteen seconds before releasing the foreground', async () => {
+  const h = setup(); h.load('checkin/modules/checkinQueue.js');
+  const pending = deferred(); let settled = false;
+  const result = h.context.waitForCheckinJob(pending.promise).then(value => { settled = true; return value; });
+  await h.advance(7000);
+  assert.equal(settled, false);
+  await h.advance(7999);
+  assert.equal(settled, false);
+  await h.advance(1);
+  assert.equal((await result).pending, true);
+  pending.resolve('confirmed later'); await flush();
+  assert.equal(await pending.promise, 'confirmed later');
+  assert.equal(h.stats.reads + h.stats.writes, 0);
+});
+
+test('confirmation received after seven seconds but before fifteen returns immediately', async () => {
+  const h = setup(); h.load('checkin/modules/checkinQueue.js');
+  const pending = deferred();
+  const result = h.context.waitForCheckinJob(pending.promise);
+  await h.advance(12000);
+  pending.resolve('confirmed'); await flush();
+  const outcome = await result;
+  assert.equal(outcome.value, 'confirmed');
+  assert.equal(outcome.pending, undefined);
+  assert.equal(h.stats.reads + h.stats.writes, 0);
 });

@@ -63,6 +63,7 @@ import { createCheckinQueue, waitForCheckinJob } from "../modules/checkinQueue.j
 import { $, qs } from "../ui/dom.js";
 import * as progressUI from "../ui/progressUI.js";
 import * as statusUI from "../ui/statusUI.js";
+import { createCheckinJobStatus } from "../ui/checkinJobStatus.js";
 import * as audio from "../audio/audio.js";
 import * as reward from "../reward/index.js";
 
@@ -100,8 +101,15 @@ const configRefresher = createCheckinConfigRefresher({
     cachedTodaySetting = setting;
   },
 });
+const checkinJobStatus = createCheckinJobStatus({
+  getJob: id => checkinJobs.get(id),
+  showStatus: (message, color) => statusUI.showStatus(message, color, { expanded: true }),
+});
 const checkinJobs = createCheckinQueue({ db, connection,
-  ensureReady: ensureCheckinStartup, onChange: renderCheckinJobs,
+  ensureReady: ensureCheckinStartup, onChange: () => {
+    renderCheckinJobs();
+    checkinJobStatus.refresh();
+  },
 });
 
 window.submitID = async function () {
@@ -123,6 +131,7 @@ window.submitID = async function () {
 
   // 1. กันเบิ้ลระดับ Protocol ก่อนเลย
   if (isProcessing) return; // 1. กันเบิ้ลระดับ Protocol ก่อนเลย
+  checkinJobStatus.clear();
   const valid = validateInput();
   // 2. เช็คความพร้อม
   if (!valid.valid) return statusUI.showError(valid.msg);
@@ -204,12 +213,13 @@ window.submitID = async function () {
     const submitted = checkinJobs.submit({ studentId, studentData, today, requestedAt });
     queuedId = submitted.job.id;
     if (submitted.existing) {
+      void submitted.promise.catch(() => {});
       if (submitted.job.status === "done") {
         showCollectionForStudent(studentId, studentData);
+        statusUI.showStatus("มีผลเช็กอินแล้ว เปิดดู Collection ได้", "#267744");
+      } else {
+        checkinJobStatus.watch(submitted.job);
       }
-      statusUI.showStatus(submitted.job.status === "done"
-        ? "มีผลเช็กอินแล้ว เปิดดู Collection ได้"
-        : "มีรายการรอยืนยันอยู่แล้ว ไม่ต้องส่งซ้ำ", "#946200");
       return;
     }
     checkinJobs.resume();
@@ -217,7 +227,7 @@ window.submitID = async function () {
     const outcome = await waitForCheckinJob(submitted.promise);
     if (outcome.pending) {
       stopRandomAnimation();
-      statusUI.showStatus("รับรายการไว้แล้ว กำลังรอยืนยัน<br>เด็กคนถัดไปเช็กอินต่อได้", "#946200");
+      checkinJobStatus.watch(submitted.job);
       return;
     }
     if (!outcome.value.attendanceResult) {
@@ -525,6 +535,8 @@ window.press = function (num) {
   if (currentInput.length >= MAX_LENGTH) 
     return;
 
+  checkinJobStatus.clear();
+
   audio.triggerFeedback("tap");
 
   currentInput += num;
@@ -540,6 +552,8 @@ window.backspace = function () {
     return;
   }
   
+  checkinJobStatus.clear();
+
   currentInput = 
     currentInput.slice(0, -1);
 

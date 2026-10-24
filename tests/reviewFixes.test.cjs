@@ -104,7 +104,7 @@ test('Result checkout action does not interpolate a stored ID into executable Ja
 });
 
 function calendar() {
-  return createHarness({ 'system/config': { appVersion: '6.0.11', weekly: { 1: { enabled: true } }, rewardItems: {
+  return createHarness({ 'system/config': { appVersion: '6.0.12', weekly: { 1: { enabled: true } }, rewardItems: {
     a: { releaseDate: '2026-10-20', name: 'A' }, b: { releaseDate: '2026-10-21', name: 'B' },
   } } }).load('shared/rewardCalendarService.js');
 }

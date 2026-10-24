@@ -244,6 +244,16 @@ button:active {
   flex-shrink: 0;
 }
 
+#status.checkin-job-status {
+  height: auto;
+  display: block;
+  overflow: visible;
+  overflow-wrap: anywhere;
+  font-size: 14px;
+  line-height: 1.5;
+  transition: color .2s ease;
+}
+
 .loading{
   animation: blink 1s infinite;
 }

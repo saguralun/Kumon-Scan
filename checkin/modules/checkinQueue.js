@@ -72,7 +72,7 @@ export function createCheckinQueue({ db, connection, ensureReady, onChange, ...o
   };
 }
 
-export function waitForCheckinJob(promise, timeoutMs = 7000) {
+export function waitForCheckinJob(promise, timeoutMs = 15000) {
   let timer;
   return Promise.race([
     promise.then(value => ({ value })),
